@@ -1,12 +1,5 @@
 #[link(name = "ldak")]
 extern "C" {
-    // void solve_sums(double *stats, double *likes, double *cohers, double *influs,
-    //             int num_parts, int gcon, int cept, int num_blocks, int length,
-    //             int ncv, int *cvindex, double *cvexps, double *stags,
-    //             double **svars, double **ssums, double *snss, double *schis,
-    //             int parttype, double tol, int maxiter, int chisol, int sflag,
-    //             char *filename)
-
     fn solve_sums(
         stats: *mut f64,
         likes: *mut f64,
@@ -18,8 +11,8 @@ extern "C" {
         num_blocks: i32,
         length: i32,
         ncv: i32,
-        cvindex: *mut i32,
-        cvexps: *mut f64,
+        cvindex: *const i32,
+        cvexps: *const f64,
         stags: *const f64,
         svars: *const *const f64,
         ssums: *const *const f64,
@@ -34,6 +27,21 @@ extern "C" {
     );
 }
 
+pub struct SolveSumsOptions {
+    pub cvindex: Option<Vec<i32>>,
+    pub cvexps: Option<Vec<f64>>,
+    pub gcon: Option<i32>,
+    pub cept: Option<i32>,
+    pub num_blocks: Option<i32>,
+    pub ncv: Option<i32>,
+    pub parttype: Option<i32>,
+    pub tol: Option<f64>,
+    pub maxiter: Option<i32>,
+    pub chisol: Option<i32>,
+    pub sflag: Option<i32>,
+}
+
+#[derive(Debug)]
 pub struct SolveSumsResult {
     pub stats: Vec<f64>,
     pub likes: Vec<f64>,
@@ -43,43 +51,35 @@ pub struct SolveSumsResult {
 
 pub fn solve_sums_wrapper(
     tagging: &Vec<f64>,
-    category_vals: &Vec<Vec<f64>>,
-    category_cons: &Vec<Vec<f64>>,
-    sample_sizes: &Vec<f64>,
     chisqs: &Vec<f64>,
-    n_variants: i32,
-    n_categories: i32,
+    sample_sizes: &Vec<f64>,
+    category_vals: &Vec<Vec<f64>>,
+    category_contribs: &Vec<Vec<f64>>,
     progress_filename: &str,
-    cvindex: Option<&mut Vec<i32>>,
-    cvexps: Option<&mut Vec<f64>>,
-    gcon: Option<i32>,
-    cept: Option<i32>,
-    num_blocks: Option<i32>,
-    ncv: Option<i32>,
-    parttype: Option<i32>,
-    tol: Option<f64>,
-    maxiter: Option<i32>,
-    chisol: Option<i32>,
-    sflag: Option<i32>,
+    options: Option<SolveSumsOptions>,
 ) -> SolveSumsResult {
-    let mut stats = vec![0.0; 9];
-    let mut likes = vec![0.0; 11];
-    let mut cohers = vec![0.0; 1];
-    let mut influs = vec![0.0; 1];
+    let gcon = options.as_ref().and_then(|x| x.gcon).unwrap_or(0);
+    let cept = options.as_ref().and_then(|x| x.cept).unwrap_or(0);
+    let num_parts = category_vals.len() as i32;
+    let total = num_parts + gcon + cept;
 
-    let stags_ptr = tagging.as_ptr();
-    let svars_ptr = category_vals.as_ptr();
-    let ssums_ptr = category_cons.as_ptr();
-    let snss_ptr = sample_sizes.as_ptr();
-    let schis_ptr = chisqs.as_ptr();
-    let cvindex_ptr = match cvindex {
-        Some(x) => x.as_mut_ptr(),
-        None => std::ptr::null_mut(),
-    };
-    let cvexps_ptr = match cvexps {
-        Some(x) => x.as_mut_ptr(),
-        None => std::ptr::null_mut(),
-    };
+    let mut stats = vec![0.0; 3 * (total + 1 + num_parts) as usize];
+    let mut likes = vec![0.0; 11];
+    let mut cohers = vec![0.0; num_parts.pow(2) as usize];
+    let mut influs = vec![0.0; num_parts as usize];
+
+    let cvindex_ptr = options
+        .as_ref()
+        .and_then(|x| x.cvindex.as_ref())
+        .map_or_else(std::ptr::null, |y| y.as_ptr());
+
+    let cvexps_ptr = options
+        .as_ref()
+        .and_then(|x| x.cvexps.as_ref())
+        .map_or_else(std::ptr::null, |y| y.as_ptr());
+
+    let svars = vec_vec_to_double_ptr_ptr(category_vals);
+    let ssums = vec_vec_to_double_ptr_ptr(category_contribs);
 
     unsafe {
         solve_sums(
@@ -87,24 +87,26 @@ pub fn solve_sums_wrapper(
             likes.as_mut_ptr(),
             cohers.as_mut_ptr(),
             influs.as_mut_ptr(),
-            n_categories,
-            gcon.unwrap_or(0),
-            cept.unwrap_or(0),
-            num_blocks.unwrap_or(-9999),
-            n_variants,
-            ncv.unwrap_or(0),
+            num_parts,
+            gcon,
+            cept,
+            options.as_ref().and_then(|x| x.num_blocks).unwrap_or(-9999),
+            tagging.len() as i32,
+            options.as_ref().and_then(|x| x.ncv).unwrap_or(0),
             cvindex_ptr,
             cvexps_ptr,
-            stags_ptr,
-            svars_ptr as *const *const f64,
-            ssums_ptr as *const *const f64,
-            snss_ptr,
-            schis_ptr,
-            parttype.unwrap_or(0),
-            tol.unwrap_or(0.001),
-            maxiter.unwrap_or(100),
-            chisol.unwrap_or(1),
-            sflag.unwrap_or(0),
+            tagging.as_ptr(),
+            svars.as_ptr(),
+            // category_vals.as_ptr() as *const *const f64,
+            ssums.as_ptr(),
+            // category_contribs.as_ptr() as *const *const f64,
+            sample_sizes.as_ptr(),
+            chisqs.as_ptr(),
+            options.as_ref().and_then(|x| x.parttype).unwrap_or(0),
+            options.as_ref().and_then(|x| x.tol).unwrap_or(0.001),
+            options.as_ref().and_then(|x| x.maxiter).unwrap_or(100),
+            options.as_ref().and_then(|x| x.chisol).unwrap_or(1),
+            options.as_ref().and_then(|x| x.sflag).unwrap_or(0),
             progress_filename.as_ptr(),
         );
     }
@@ -115,4 +117,12 @@ pub fn solve_sums_wrapper(
         cohers,
         influs,
     }
+}
+
+fn vec_vec_to_double_ptr_ptr(x: &[Vec<f64>]) -> Vec<*const f64> {
+    let mut ptrs = Vec::new();
+    for item in x.iter() {
+        ptrs.push(item.as_ptr());
+    }
+    ptrs
 }

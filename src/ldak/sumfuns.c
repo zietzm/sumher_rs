@@ -258,14 +258,14 @@ void solve_sums(double *stats, double *likes, double *cohers, double *influs,
   }
 
   // prepare to screen and file print
-  printf("Iter\tHer_All\t");
-  if (gcon == 1) {
-    printf("Scaling\t");
-  }
-  if (cept == 1) {
-    printf("Intercept\t");
-  }
-  printf("Likelihood\tDifference\tTarget\n");
+  // printf("Iter\tHer_All\t");
+  // if (gcon == 1) {
+  //   printf("Scaling\t");
+  // }
+  // if (cept == 1) {
+  //   printf("Intercept\t");
+  // }
+  // printf("Likelihood\tDifference\tTarget\n");
 
   if ((output = fopen(filename, "a")) == NULL) {
     printf("Error re-opening %s\n", filename);
@@ -344,24 +344,24 @@ void solve_sums(double *stats, double *likes, double *cohers, double *influs,
       sumhers += thetas[q] / gc * ssums[q][q] / scale;
     }
 
-    if (count == 0) {
-      printf("Start\t");
-    } else {
-      printf("%d\t", count);
-    }
-    printf("%.4f\t", sumhers);
-    if (gcon == 1) {
-      printf("%.4f\t", gc);
-    }
-    if (cept == 1) {
-      printf("%.4f\t", 1 + thetas[num_parts + gcon] / gc);
-    }
-    printf("%.2f\t", like);
-    if (count == 0) {
-      printf("n/a\t\t%.6f\n", tol);
-    } else {
-      printf("%.6f\t%.6f\n", diff, tol);
-    }
+    // if (count == 0) {
+    //   printf("Start\t");
+    // } else {
+    //   printf("%d\t", count);
+    // }
+    // printf("%.4f\t", sumhers);
+    // if (gcon == 1) {
+    //   printf("%.4f\t", gc);
+    // }
+    // if (cept == 1) {
+    //   printf("%.4f\t", 1 + thetas[num_parts + gcon] / gc);
+    // }
+    // printf("%.2f\t", like);
+    // if (count == 0) {
+    //   printf("n/a\t\t%.6f\n", tol);
+    // } else {
+    //   printf("%.6f\t%.6f\n", diff, tol);
+    // }
 
     if ((output = fopen(filename, "a")) == NULL) {
       printf("Error re-opening %s\n", filename);
@@ -603,7 +603,7 @@ void solve_sums(double *stats, double *likes, double *cohers, double *influs,
 
     count++;
   } // end of while loop
-  printf("\n");
+  // printf("\n");
 
   // load up first column of stats which contain Q hers, gc, na, sum of Q hers,
   // Q cats
@@ -1041,7 +1041,7 @@ void solve_sums(double *stats, double *likes, double *cohers, double *influs,
           }
         }
       } // end of p loop
-      printf("\n");
+      // printf("\n");
 
       // get sds for all stats (as is)
       for (q = 0; q < total + 1 + num_parts; q++) {
