@@ -1,6 +1,6 @@
+use anyhow::Result;
 use csv::ReaderBuilder;
 use polars::prelude::*;
-use std::error::Error;
 use std::fs::File;
 use std::io::prelude::*;
 use std::io::BufReader;
@@ -9,7 +9,7 @@ use std::io::BufReader;
 pub struct CategoryInfo {
     pub n_variants: usize,
     pub n_categories: usize,
-    pub category_names: Vec<String>,
+    pub names: Vec<String>,
     pub ssums: Vec<Vec<f64>>,
 }
 
@@ -65,7 +65,7 @@ fn final_lines_to_ssums(contrib_lines: &[String], final_line: &str) -> Vec<Vec<f
     ssums
 }
 
-fn read_category_info(filename: &str) -> Result<CategoryInfo, Box<dyn Error>> {
+fn read_category_info(filename: &str) -> Result<CategoryInfo> {
     let file = File::open(filename)?;
     let buf_reader = BufReader::new(file);
 
@@ -99,7 +99,7 @@ fn read_category_info(filename: &str) -> Result<CategoryInfo, Box<dyn Error>> {
     Ok(CategoryInfo {
         n_variants,
         n_categories: category_names.len(),
-        category_names,
+        names: category_names,
         ssums,
     })
 }
@@ -109,7 +109,7 @@ pub struct TagInfo {
     pub category_info: CategoryInfo,
 }
 
-pub fn read_tagfile(filename: &str) -> Result<TagInfo, Box<dyn Error>> {
+pub fn read_tagfile(filename: &str) -> Result<TagInfo> {
     let category_info = read_category_info(filename)?;
 
     let mut csv_reader = ReaderBuilder::new()

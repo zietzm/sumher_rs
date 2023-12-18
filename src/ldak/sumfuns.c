@@ -32,8 +32,7 @@ void solve_sums(double *stats, double *likes, double *cohers, double *influs,
                 int num_parts, int gcon, int cept, int num_blocks, int length,
                 int ncv, int *cvindex, double *cvexps, double *stags,
                 double **svars, double **ssums, double *snss, double *schis,
-                int parttype, double tol, int maxiter, int chisol, int sflag,
-                char *filename)
+                double tol, int maxiter, int chisol, int sflag, char *filename)
 // sflag=0 - normal, sflag=1 - first pass, sflag=2 - second pass
 // sflag=3 - just get expectations and likelihood, sflag=4 - LDSC, sflag=5 -
 // divide+updating
@@ -986,9 +985,9 @@ void solve_sums(double *stats, double *likes, double *cohers, double *influs,
       }
 
       for (p = 0; p < num_blocks; p++) {
-        if (p % 100000 == 0) {
-          printf("Performing Jackknife %d out of %d\n", p + 1, num_blocks);
-        }
+        // if (p % 100000 == 0) {
+        //   printf("Performing Jackknife %d out of %d\n", p + 1, num_blocks);
+        // }
         start = (double)(p) / num_blocks * length;
         end = (double)(p + 1) / num_blocks * length;
 
@@ -1158,8 +1157,8 @@ void solve_sums(double *stats, double *likes, double *cohers, double *influs,
 void solve_cors(double *stats, int num_parts, int gcon, int cept,
                 int num_blocks, int length, double *stags, double **svars,
                 double **ssums, double *snss, double *schis, double *srhos,
-                double *snss2, double *schis2, double *srhos2, int parttype,
-                double tol, int maxiter, char *filename) {
+                double *snss2, double *schis2, double *srhos2, double tol,
+                int maxiter, char *filename) {
   int j, q, q2, p, count, start, end, mark, one = 1;
   double sum, sum2, sum3, sumsq, mean, var, alpha, beta;
 
@@ -1239,23 +1238,23 @@ void solve_cors(double *stats, int num_parts, int gcon, int cept,
   ////////
 
   // estimate first total2 parameter
-  printf("Estimating heritabilies for Trait 1\n");
-  printf("Iter\tHer_All\t");
-  if (gcon == 1) {
-    printf("Scaling\t");
-  }
-  if (cept == 1) {
-    printf("Intercept\t");
-  }
-  printf("Difference\tTarget\n");
-  printf("Start\t0.0000\t");
-  if (gcon == 1) {
-    printf("1.0000\t");
-  }
-  if (cept == 1) {
-    printf("1.0000\t");
-  }
-  printf("n/a\t\t%.6f\n", tol);
+  // printf("Estimating heritabilies for Trait 1\n");
+  // printf("Iter\tHer_All\t");
+  // if (gcon == 1) {
+  //   printf("Scaling\t");
+  // }
+  // if (cept == 1) {
+  //   printf("Intercept\t");
+  // }
+  // printf("Difference\tTarget\n");
+  // printf("Start\t0.0000\t");
+  // if (gcon == 1) {
+  //   printf("1.0000\t");
+  // }
+  // if (cept == 1) {
+  //   printf("1.0000\t");
+  // }
+  // printf("n/a\t\t%.6f\n", tol);
 
   if ((output = fopen(filename, "a")) == NULL) {
     printf("Error re-opening %s\n", filename);
@@ -1325,14 +1324,14 @@ void solve_cors(double *stats, int num_parts, int gcon, int cept,
     sumold = sumhers;
 
     // print update - have just got gc and sumhers
-    printf("%d\t%.4f\t", count + 1, sumhers);
-    if (gcon == 1) {
-      printf("%.4f\t", gc);
-    }
-    if (cept == 1) {
-      printf("%.4f\t", 1 + thetas[num_parts + gcon] / gc);
-    }
-    printf("%.6f\t%.6f\n", diff, tol);
+    // printf("%d\t%.4f\t", count + 1, sumhers);
+    // if (gcon == 1) {
+    //   printf("%.4f\t", gc);
+    // }
+    // if (cept == 1) {
+    //   printf("%.4f\t", 1 + thetas[num_parts + gcon] / gc);
+    // }
+    // printf("%.6f\t%.6f\n", diff, tol);
 
     if ((output = fopen(filename, "a")) == NULL) {
       printf("Error re-opening %s\n", filename);
@@ -1403,9 +1402,9 @@ void solve_cors(double *stats, int num_parts, int gcon, int cept,
   for (p = 0; p < num_blocks; p++) {
     start = (double)p / num_blocks * length;
     end = (double)(p + 1) / num_blocks * length;
-    if (p % 500000 == 0) {
-      printf("Performing Jackknife %d out of %d\n", p + 1, num_blocks);
-    }
+    // if (p % 500000 == 0) {
+    //   printf("Performing Jackknife %d out of %d\n", p + 1, num_blocks);
+    // }
     count = end - start;
 
     // reset sXTX and sXTY
@@ -1449,28 +1448,28 @@ void solve_cors(double *stats, int num_parts, int gcon, int cept,
     }
     jacks[total + mark] = sumhers;
   }
-  printf("\n");
+  // printf("\n");
 
   ////////
 
   // estimate second total2 parameters
-  printf("Estimating heritabilies for Trait 2\n");
-  printf("Iter\tHer_All\t");
-  if (gcon == 1) {
-    printf("Scaling\t");
-  }
-  if (cept == 1) {
-    printf("Intercept\t");
-  }
-  printf("Difference\tTarget\n");
-  printf("Start\t0.0000\t");
-  if (gcon == 1) {
-    printf("1.0000\t");
-  }
-  if (cept == 1) {
-    printf("1.0000\t");
-  }
-  printf("n/a\t\t%.6f\n", tol);
+  // printf("Estimating heritabilies for Trait 2\n");
+  // printf("Iter\tHer_All\t");
+  // if (gcon == 1) {
+  //   printf("Scaling\t");
+  // }
+  // if (cept == 1) {
+  //   printf("Intercept\t");
+  // }
+  // printf("Difference\tTarget\n");
+  // printf("Start\t0.0000\t");
+  // if (gcon == 1) {
+  //   printf("1.0000\t");
+  // }
+  // if (cept == 1) {
+  //   printf("1.0000\t");
+  // }
+  // printf("n/a\t\t%.6f\n", tol);
 
   if ((output = fopen(filename, "a")) == NULL) {
     printf("Error re-opening %s\n", filename);
@@ -1541,14 +1540,14 @@ void solve_cors(double *stats, int num_parts, int gcon, int cept,
     sumold = sumhers2;
 
     // print update - have just got gc2 and sumhers2
-    printf("%d\t%.4f\t", count + 1, sumhers2);
-    if (gcon == 1) {
-      printf("%.4f\t", gc2);
-    }
-    if (cept == 1) {
-      printf("%.4f\t", 1 + thetas[num_parts + gcon] / gc2);
-    }
-    printf("%.6f\t%.6f\n", diff, tol);
+    // printf("%d\t%.4f\t", count + 1, sumhers2);
+    // if (gcon == 1) {
+    //   printf("%.4f\t", gc2);
+    // }
+    // if (cept == 1) {
+    //   printf("%.4f\t", 1 + thetas[num_parts + gcon] / gc2);
+    // }
+    // printf("%.6f\t%.6f\n", diff, tol);
 
     if ((output = fopen(filename, "a")) == NULL) {
       printf("Error re-opening %s\n", filename);
@@ -1619,9 +1618,9 @@ void solve_cors(double *stats, int num_parts, int gcon, int cept,
   for (p = 0; p < num_blocks; p++) {
     start = (double)p / num_blocks * length;
     end = (double)(p + 1) / num_blocks * length;
-    if (p % 500000 == 0) {
-      printf("Performing Jackknife %d out of %d\n", p + 1, num_blocks);
-    }
+    // if (p % 500000 == 0) {
+    //   printf("Performing Jackknife %d out of %d\n", p + 1, num_blocks);
+    // }
     count = end - start;
 
     // reset sXTX and sXTY
@@ -1665,16 +1664,16 @@ void solve_cors(double *stats, int num_parts, int gcon, int cept,
     }
     jacks[total + 1 + mark] = sumhers2;
   }
-  printf("\n");
+  // printf("\n");
 
   ////////
 
   // estimate final total3 parameters
-  printf("Estimating coheritabilies\n");
-  printf("Iter\tCoh_All\t");
-  printf("Difference\tTarget\n");
-  printf("Start\t0.0000\t");
-  printf("n/a\t\t%.6f\n", tol);
+  // printf("Estimating coheritabilies\n");
+  // printf("Iter\tCoh_All\t");
+  // printf("Difference\tTarget\n");
+  // printf("Start\t0.0000\t");
+  // printf("n/a\t\t%.6f\n", tol);
 
   if ((output = fopen(filename, "a")) == NULL) {
     printf("Error re-opening %s\n", filename);
@@ -1737,8 +1736,8 @@ void solve_cors(double *stats, int num_parts, int gcon, int cept,
     sumold = sumhers3;
 
     // print update - have just got sumhers3
-    printf("%d\t%.4f\t", count + 1, sumhers3);
-    printf("%.6f\t%.6f\n", diff, tol);
+    // printf("%d\t%.4f\t", count + 1, sumhers3);
+    // printf("%.6f\t%.6f\n", diff, tol);
 
     if ((output = fopen(filename, "a")) == NULL) {
       printf("Error re-opening %s\n", filename);
@@ -1811,9 +1810,9 @@ void solve_cors(double *stats, int num_parts, int gcon, int cept,
   for (p = 0; p < num_blocks; p++) {
     start = (double)p / num_blocks * length;
     end = (double)(p + 1) / num_blocks * length;
-    if (p % 500000 == 0) {
-      printf("Performing Jackknife %d out of %d\n", p + 1, num_blocks);
-    }
+    // if (p % 500000 == 0) {
+    // printf("Performing Jackknife %d out of %d\n", p + 1, num_blocks);
+    // }
     count = end - start;
 
     // reset sXTX and sXTY
@@ -1868,7 +1867,7 @@ void solve_cors(double *stats, int num_parts, int gcon, int cept,
           pow(jacks[q + mark] * jacks[total2 + q + mark], -.5);
     }
   }
-  printf("\n");
+  // printf("\n");
 
   ////////
 
@@ -1886,14 +1885,14 @@ void solve_cors(double *stats, int num_parts, int gcon, int cept,
     stats[q + total + 4 + num_parts] = pow(var, .5);
   }
 
-  printf("Trait 1 heritability: %.4f (%.4f)\n", stats[total],
-         stats[total + total + 4 + num_parts]);
-  printf("Trait 2 heritability: %.4f (%.4f)\n", stats[total + 1],
-         stats[total + 1 + total + 4 + num_parts]);
-  printf("Coheritability: %.4f (%.4f)\n", stats[total + 2],
-         stats[total + 2 + total + 4 + num_parts]);
-  printf("Correlation: %.4f (%.4f)\n\n", stats[total + 3],
-         stats[total + 3 + total + 4 + num_parts]);
+  // printf("Trait 1 heritability: %.4f (%.4f)\n", stats[total],
+  //        stats[total + total + 4 + num_parts]);
+  // printf("Trait 2 heritability: %.4f (%.4f)\n", stats[total + 1],
+  //        stats[total + 1 + total + 4 + num_parts]);
+  // printf("Coheritability: %.4f (%.4f)\n", stats[total + 2],
+  //        stats[total + 2 + total + 4 + num_parts]);
+  // printf("Correlation: %.4f (%.4f)\n\n", stats[total + 3],
+  //        stats[total + 3 + total + 4 + num_parts]);
 
   free(snss3);
   free(schis3);

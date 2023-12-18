@@ -1,27 +1,28 @@
 use glob::glob;
 use std::path::Path;
 
-use indicatif::ParallelProgressIterator;
-use rayon::prelude::*;
-
 mod ffi;
 mod hsq;
 mod io;
-use crate::hsq::estimate_heritability;
-use crate::io::tagging::read_tagfile;
+mod util;
+use crate::util::format_plink_sumstats;
+use crate::util::{compute_hsq_parallel, compute_rg_parallel};
 
 fn main() {
-    let output_path = Path::new("/Users/zietzm/Documents/projects/sumher_rs/example/ldak/");
+    // let path = Path::new("/Users/zietzm/Documents/projects/sumher_rs/example/plink_white_british.q_100001_0.glm.linear");
+    // let output_path = Path::new("/Users/zietzm/Documents/projects/sumher_rs/example/plink_white_british.q_100001_0.glm.linear.summaries");
+    // let result = format_plink_sumstats(path, output_path);
+    // match result {
+    //     Ok(_) => println!("Success!"),
+    //     Err(e) => println!("Error: {}", e),
+    // }
+
+    let output_root = Path::new("/Users/zietzm/Documents/projects/sumher_rs/example/ldak/");
+    println!("Outputting to {}", output_root.to_str().unwrap());
 
     let tagroot = Path::new("/Users/zietzm/Documents/projects/sumher_rs/example/ldak");
-    // let tagpath = tagroot.join("ldak.thin.hapmap.gbr.tagging");
-    let tagpath = tagroot.join("bld.ldak.hapmap.gbr.tagging");
-
-    if !tagpath.exists() {
-        println!("File {} does not exist!", tagpath.to_str().unwrap());
-        return;
-    }
-    let tag_info = read_tagfile(tagpath.to_str().unwrap()).unwrap();
+    let tagpath = tagroot.join("ldak.thin.hapmap.gbr.tagging");
+    // let tagpath = tagroot.join("bld.ldak.hapmap.gbr.tagging");
 
     let gwas_root = Path::new("/Users/zietzm/Documents/projects/sumher_rs/example");
     let gwas_paths = glob(gwas_root.join("*.glm.linear.summaries").to_str().unwrap())
@@ -29,31 +30,26 @@ fn main() {
         .map(|x| x.unwrap())
         .collect::<Vec<_>>();
 
-    println!("Found {} GWAS file(s)", gwas_paths.len());
-
-    gwas_paths
+    // Duplicate for testing
+    let gwas_paths = gwas_paths
         .iter()
         .cycle()
-        .take(10)
-        .collect::<Vec<_>>()
-        // .iter()
-        .into_par_iter()
-        .progress_count(10_u64)
-        .for_each(|x| {
-            let output_path = output_path
-                .join(x.file_stem().unwrap())
-                .with_extension("hers");
+        .take(100)
+        // .map(|x| x.to_path_buf())
+        .collect::<Vec<_>>();
 
-            let result = estimate_heritability(
-                &tag_info,
-                x.to_str().unwrap(),
-                output_path.to_str().unwrap(),
-            );
-            match result {
-                Ok(_) => {}
-                Err(e) => println!("Error: {}", e),
-            }
-        });
+    println!("Found {} GWAS file(s)", gwas_paths.len());
 
+    let result = compute_hsq_parallel(&tagpath, &gwas_paths, output_root, 500);
+    match result {
+        Ok(_) => println!("Success on heritability!"),
+        Err(e) => println!("Error: {}", e),
+    }
+
+    let result = compute_rg_parallel(&tagpath, &gwas_paths, output_root, 200);
+    match result {
+        Ok(_) => println!("Success on genetic correlation!"),
+        Err(e) => println!("Error: {}", e),
+    }
     println!("Done!");
 }

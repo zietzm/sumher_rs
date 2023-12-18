@@ -1,4 +1,5 @@
-/target
+target
 .ipynb_checkpoints
 __pycache__
 progress.txt
+example
