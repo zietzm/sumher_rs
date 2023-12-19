@@ -1,3 +1,5 @@
+use crate::hsq::AlignedGwasSumstats;
+
 use std::ffi::CString;
 use std::os::raw::c_char;
 
@@ -97,9 +99,9 @@ pub struct SolveCorsResult {
 }
 
 pub fn solve_sums_wrapper(
-    tagging: &Vec<f64>,
-    chisqs: &Vec<f64>,
-    sample_sizes: &Vec<f64>,
+    tagging: &[f64],
+    chisqs: &[f64],
+    sample_sizes: &[f64],
     category_vals: &[Vec<f64>],
     category_contribs: &[Vec<f64>],
     progress_filename: &str,
@@ -167,13 +169,9 @@ pub fn solve_sums_wrapper(
 }
 
 pub fn solve_cors_wrapper(
-    tagging: &Vec<f64>,
-    chisqs: &Vec<f64>,
-    sample_sizes: &Vec<f64>,
-    rhos: &Vec<f64>,
-    chisqs2: &Vec<f64>,
-    sample_sizes2: &Vec<f64>,
-    rhos2: &Vec<f64>,
+    tagging: &[f64],
+    gwas_sumstats_1: &AlignedGwasSumstats,
+    gwas_sumstats_2: &AlignedGwasSumstats,
     category_vals: &[Vec<f64>],
     category_contribs: &[Vec<f64>],
     progress_filename: &str,
@@ -200,12 +198,12 @@ pub fn solve_cors_wrapper(
             tagging.as_ptr(),
             svars.as_ptr(),
             ssums.as_ptr(),
-            sample_sizes.as_ptr(),
-            chisqs.as_ptr(),
-            rhos.as_ptr(),
-            sample_sizes2.as_ptr(),
-            chisqs2.as_ptr(),
-            rhos2.as_ptr(),
+            gwas_sumstats_1.sample_sizes.as_ptr(),
+            gwas_sumstats_1.chisq.as_ptr(),
+            gwas_sumstats_1.rhos.as_ptr(),
+            gwas_sumstats_2.sample_sizes.as_ptr(),
+            gwas_sumstats_2.chisq.as_ptr(),
+            gwas_sumstats_2.rhos.as_ptr(),
             options.as_ref().and_then(|x| x.tol).unwrap_or(0.0001),
             options.as_ref().and_then(|x| x.maxiter).unwrap_or(100),
             progress_filename.as_ptr(),
