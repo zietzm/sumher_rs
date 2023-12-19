@@ -34,17 +34,17 @@ fn main() {
     let gwas_paths = gwas_paths
         .iter()
         .cycle()
-        .take(100)
+        .take(20)
         // .map(|x| x.to_path_buf())
         .collect::<Vec<_>>();
 
     println!("Found {} GWAS file(s)", gwas_paths.len());
 
-    let result = compute_hsq_parallel(&tagpath, &gwas_paths, output_root, 500);
-    match result {
-        Ok(_) => println!("Success on heritability!"),
-        Err(e) => println!("Error: {}", e),
-    }
+    // let result = compute_hsq_parallel(&tagpath, &gwas_paths, output_root, 500);
+    // match result {
+    //     Ok(_) => println!("Success on heritability!"),
+    //     Err(e) => println!("Error: {}", e),
+    // }
 
     let result = compute_rg_parallel(&tagpath, &gwas_paths, output_root, 200);
     match result {

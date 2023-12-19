@@ -5,7 +5,7 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::io::BufReader;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CategoryInfo {
     pub n_variants: usize,
     pub n_categories: usize,
@@ -104,6 +104,7 @@ fn read_category_info(filename: &str) -> Result<CategoryInfo> {
     })
 }
 
+#[derive(Clone)]
 pub struct TagInfo {
     pub df: DataFrame,
     pub category_info: CategoryInfo,

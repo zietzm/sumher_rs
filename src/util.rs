@@ -1,10 +1,13 @@
 use anyhow::Result;
 use itertools::Itertools;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
+use tokio::runtime::Runtime;
+use tokio::sync::Semaphore;
 
-use crate::hsq::estimate_genetic_correlation;
+use crate::hsq::estimate_genetic_correlation_async;
 use crate::hsq::estimate_heritability;
-use indicatif::ProgressIterator;
+use indicatif::{ParallelProgressIterator, ProgressBar, ProgressIterator, ProgressStyle};
 use rayon::prelude::*;
 
 use crate::io::tagging::read_tagfile;
@@ -134,7 +137,7 @@ pub fn compute_rg_parallel(
     tag_path: &Path,
     gwas_paths: &[&PathBuf],
     output_root: &Path,
-    chunk_size: usize,
+    n_permits: usize,
 ) -> Result<()> {
     let mut tag_info = read_tagfile(tag_path.to_str().unwrap())?;
 
@@ -145,18 +148,55 @@ pub fn compute_rg_parallel(
         .iter()
         .tuple_combinations::<(_, _)>()
         .map(|(x, y)| (*x, *y))
+        .map(|(x, y)| (x.to_path_buf(), y.to_path_buf()))
         .collect::<Vec<_>>();
 
-    combinations
-        .chunks(chunk_size)
-        .progress_count((combinations.len() as f32 / chunk_size as f32).ceil() as u64)
-        .map(|batch| {
-            batch
-                .par_iter()
-                .map(|(x, y)| estimate_genetic_correlation(&tag_info, x, y, output_root, aligned))
-                .collect::<Result<Vec<_>>>()
+    let rt = Runtime::new()?;
+    let sem = Arc::new(Semaphore::new(n_permits));
+    let tag_info = Arc::new(tag_info.clone());
+    let output_root = output_root.to_path_buf();
+
+    let pb = ProgressBar::new(combinations.len() as u64);
+    pb.set_style(
+        indicatif::ProgressStyle::default_bar()
+            .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} ({eta}) {msg}")?
+            .progress_chars("##-"),
+    );
+
+    let pb = Arc::new(Mutex::new(pb));
+
+    let tasks = combinations
+        .par_iter()
+        .map(|(x, y)| {
+            let sem_clone = sem.clone();
+            let tag_info = tag_info.clone();
+            let output_root = output_root.clone();
+            let x = x.clone();
+            let y = y.clone();
+            let pb = pb.clone();
+            rt.spawn(async move {
+                let result = estimate_genetic_correlation_async(
+                    tag_info,
+                    x,
+                    y,
+                    output_root,
+                    aligned,
+                    sem_clone,
+                )
+                .await;
+                pb.lock().unwrap().inc(1);
+                result
+            })
         })
-        .collect::<Result<Vec<_>>>()?;
+        .collect::<Vec<_>>();
+
+    for task in tasks {
+        let result = rt.block_on(task);
+        match result {
+            Ok(_) => {}
+            Err(e) => println!("Error: {}", e),
+        }
+    }
 
     Ok(())
 }

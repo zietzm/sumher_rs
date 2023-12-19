@@ -13,6 +13,7 @@ use ndarray::Axis;
 use polars::prelude::*;
 use serde::Serialize;
 use serde::Serializer;
+use tokio::sync::Semaphore;
 
 fn round_serialize<S>(x: &f64, s: S) -> Result<S::Ok, S::Error>
 where
@@ -376,6 +377,7 @@ pub fn estimate_heritability(
     let gwas_df = read_gwas_result(gwas_path)?;
 
     let input_data = SumherInput::from_gwas_tag_info(tag_info, &gwas_df, aligned)?;
+    let progress_path = output_path.with_extension("progress.txt");
 
     let result = solve_sums_wrapper(
         &input_data.tagging,
@@ -383,7 +385,7 @@ pub fn estimate_heritability(
         &input_data.gwas_sumstats.sample_sizes,
         &input_data.category_values,
         &tag_info.category_info.ssums,
-        "progress.txt",
+        progress_path.to_str().unwrap(),
         None,
     );
 
@@ -411,6 +413,8 @@ pub fn estimate_genetic_correlation(
     let gwas_df2 = read_gwas_result(gwas_path2)?;
 
     let input_data = SumcorsInput::from_gwas_tag_info(tag_info, &gwas_df1, &gwas_df2, aligned)?;
+    let output_path = format_rg_output_path(gwas_path1, gwas_path2, output_root);
+    let progress_path = output_path.with_extension("progress.txt");
 
     let result = solve_cors_wrapper(
         &input_data.tagging,
@@ -422,13 +426,61 @@ pub fn estimate_genetic_correlation(
         &input_data.gwas_sumstats2.rhos,
         &input_data.category_values,
         &tag_info.category_info.ssums,
-        "progress.txt",
+        progress_path.to_str().unwrap(),
         None,
     );
 
     let partitions = format_genetic_correlation(&result);
-    let output_path = format_rg_output_path(gwas_path1, gwas_path2, output_root);
     write_results(&output_path, &partitions)?;
+
+    Ok(())
+}
+
+pub async fn estimate_genetic_correlation_async(
+    tag_info: Arc<TagInfo>,
+    gwas_path_1: PathBuf,
+    gwas_path_2: PathBuf,
+    output_root: PathBuf,
+    aligned: bool,
+    semaphore: Arc<Semaphore>,
+) -> Result<()> {
+    let permit = semaphore.acquire().await.unwrap();
+
+    let path_1 = gwas_path_1.clone();
+    let path_2 = gwas_path_2.clone();
+    let gwas_df1 = tokio::task::spawn_blocking(move || read_gwas_result(&path_1));
+    let gwas_df2 = tokio::task::spawn_blocking(move || read_gwas_result(&path_2));
+
+    let gwas_df1 = gwas_df1.await.unwrap()?;
+    let gwas_df2 = gwas_df2.await.unwrap()?;
+
+    drop(permit);
+
+    let input_data = SumcorsInput::from_gwas_tag_info(&tag_info, &gwas_df1, &gwas_df2, aligned)?;
+    let output_path = format_rg_output_path(&gwas_path_1, &gwas_path_2, &output_root);
+    let progress_path = output_path.with_extension("progress.txt");
+
+    let result = solve_cors_wrapper(
+        &input_data.tagging,
+        &input_data.gwas_sumstats1.chisq,
+        &input_data.gwas_sumstats1.sample_sizes,
+        &input_data.gwas_sumstats1.rhos,
+        &input_data.gwas_sumstats2.chisq,
+        &input_data.gwas_sumstats2.sample_sizes,
+        &input_data.gwas_sumstats2.rhos,
+        &input_data.category_values,
+        &tag_info.category_info.ssums,
+        progress_path.to_str().unwrap(),
+        None,
+    );
+
+    let partitions = format_genetic_correlation(&result);
+
+    let permit = semaphore.acquire().await.unwrap();
+
+    write_results(&output_path, &partitions)?;
+
+    drop(permit);
 
     Ok(())
 }
