@@ -7,6 +7,7 @@ use polars::prelude::*;
 
 use crate::hsq::AlignedGwasSumstats;
 
+/// Read GWAS summary statistics from an LDAK-formatted file.
 pub fn read_gwas_result<P>(filename: &P) -> Result<DataFrame>
 where
     P: AsRef<Path> + AsRef<std::ffi::OsStr> + ?Sized,
@@ -25,6 +26,9 @@ where
     Ok(df)
 }
 
+/// Read GWAS summary statistics from an LDAK-formatted file when the predictors
+/// are known to be aligned across files. This is faster than reading the file
+/// into a DataFrame and joining the predictors.
 pub fn read_gwas_aligned<P>(filename: &P) -> Result<AlignedGwasSumstats>
 where
     P: AsRef<Path> + AsRef<std::ffi::OsStr> + ?Sized,

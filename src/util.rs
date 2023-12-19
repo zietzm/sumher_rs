@@ -1,20 +1,11 @@
-use anyhow::Result;
-use itertools::Itertools;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
-use tokio::runtime::Runtime;
-use tokio::sync::Semaphore;
 
-use crate::hsq::{estimate_heritability, get_category_values_vec, get_tagging_vec};
-use crate::hsq::{rg_aligned, rg_misaligned};
-use indicatif::{ProgressBar, ProgressIterator};
-use rayon::prelude::*;
-
-use crate::io::tagging::read_tagfile;
 use crate::io::tagging::TagInfo;
 
+use anyhow::Result;
 use polars::prelude::*;
 
+/// Reformat Plink summary statistics files for use with LDAK
 pub fn format_plink_sumstats<P>(gwas_path: P, output_path: P) -> Result<()>
 where
     P: Into<PathBuf> + AsRef<Path>,
@@ -48,6 +39,8 @@ where
     Ok(())
 }
 
+/// Read Predictors from LDAK-format GWAS summary statistics files
+/// Predictors are the SNP IDs, either rsIDs or chr:pos
 fn read_predictors<P>(path: P) -> Result<Series>
 where
     P: Into<PathBuf>,
@@ -61,7 +54,10 @@ where
     Ok(df.column("Predictor").unwrap().clone())
 }
 
-fn check_predictors_aligned<P>(gwas_paths: &[P]) -> Result<Option<DataFrame>>
+/// Check if predictors are aligned across GWAS summary statistics files
+/// If so, return the shared predictors. Aligned predictors enable much
+/// faster computation.
+pub fn check_predictors_aligned<P>(gwas_paths: &[P]) -> Result<Option<DataFrame>>
 where
     P: Into<PathBuf> + Clone,
 {
@@ -82,7 +78,8 @@ where
     }
 }
 
-fn align_if_possible(tag_info: &mut TagInfo, alignment: Option<DataFrame>) -> Result<bool> {
+/// Align predictors from the tag file with the predictors from the GWAS summary statistics files
+pub fn align_if_possible(tag_info: &mut TagInfo, alignment: Option<DataFrame>) -> Result<bool> {
     match alignment {
         Some(shared_predictors) => {
             println!("Predictors are aligned.");
@@ -99,154 +96,4 @@ fn align_if_possible(tag_info: &mut TagInfo, alignment: Option<DataFrame>) -> Re
         }
         None => Ok(false),
     }
-}
-
-pub fn compute_hsq_parallel(
-    tag_path: &Path,
-    gwas_paths: &[PathBuf],
-    output_root: &Path,
-    chunk_size: usize,
-) -> Result<()> {
-    let mut tag_info = read_tagfile(tag_path.to_str().unwrap())?;
-
-    let alignment_info = check_predictors_aligned(gwas_paths)?;
-    let aligned = align_if_possible(&mut tag_info, alignment_info)?;
-
-    gwas_paths
-        .chunks(chunk_size)
-        .progress_count((gwas_paths.len() as f32 / chunk_size as f32).ceil() as u64)
-        .for_each(|batch| {
-            batch.par_iter().for_each(|path| {
-                let output_path = output_root.with_extension(format!(
-                    "{}.hers",
-                    path.file_stem().unwrap().to_str().unwrap()
-                ));
-
-                let result = estimate_heritability(&tag_info, path, &output_path, aligned);
-                match result {
-                    Ok(_) => {}
-                    Err(e) => println!("Error: {}", e),
-                }
-            })
-        });
-
-    Ok(())
-}
-
-pub fn compute_rg_parallel(
-    tag_path: &Path,
-    gwas_paths: &[PathBuf],
-    output_root: &Path,
-    n_permits: usize,
-) -> Result<()> {
-    let mut tag_info = read_tagfile(tag_path.to_str().unwrap())?;
-
-    let combinations = gwas_paths
-        .iter()
-        .map(|x| Arc::new(x.clone()))
-        .tuple_combinations::<(_, _)>()
-        .collect::<Vec<(Arc<PathBuf>, Arc<PathBuf>)>>();
-
-    let rt = Runtime::new()?;
-    let sem = Arc::new(Semaphore::new(n_permits));
-    let pb = ProgressBar::new(combinations.len() as u64);
-    pb.set_style(
-        indicatif::ProgressStyle::default_bar()
-            .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} ({eta}) {msg}")?
-            .progress_chars("##-"),
-    );
-    let pb = Arc::new(Mutex::new(pb));
-    let output_root = Arc::new(output_root.to_path_buf());
-
-    let alignment_info = check_predictors_aligned(gwas_paths)?;
-    let aligned = align_if_possible(&mut tag_info, alignment_info)?;
-
-    if aligned {
-        compute_rg_aligned(rt, &tag_info, &combinations, output_root, sem, pb)
-    } else {
-        compute_rg_misaligned(rt, &tag_info, &combinations, output_root, sem, pb)
-    }
-}
-
-fn compute_rg_misaligned(
-    runtime: Runtime,
-    tag_info: &TagInfo,
-    combinations: &[(Arc<PathBuf>, Arc<PathBuf>)],
-    output_root: Arc<PathBuf>,
-    semaphore: Arc<Semaphore>,
-    progress: Arc<Mutex<ProgressBar>>,
-) -> Result<()> {
-    let tag_info = Arc::new(tag_info.clone());
-
-    let tasks = combinations
-        .par_iter()
-        .map(|(x, y)| {
-            let sem_clone = semaphore.clone();
-            let tag_info = tag_info.clone();
-            let output_root = output_root.clone();
-            let x = x.clone();
-            let y = y.clone();
-            let pb = progress.clone();
-            runtime.spawn(async move {
-                let result = rg_misaligned(tag_info, x, y, output_root, sem_clone).await;
-                pb.lock().unwrap().inc(1);
-                result
-            })
-        })
-        .collect::<Vec<_>>();
-
-    for task in tasks {
-        let result = runtime.block_on(task);
-        match result {
-            Ok(_) => {}
-            Err(e) => println!("Error: {}", e),
-        }
-    }
-
-    Ok(())
-}
-
-fn compute_rg_aligned(
-    runtime: Runtime,
-    tag_info: &TagInfo,
-    combinations: &[(Arc<PathBuf>, Arc<PathBuf>)],
-    output_root: Arc<PathBuf>,
-    semaphore: Arc<Semaphore>,
-    progress: Arc<Mutex<ProgressBar>>,
-) -> Result<()> {
-    let tagging = Arc::new(get_tagging_vec(&tag_info.df)?);
-    let category_values = Arc::new(get_category_values_vec(
-        &tag_info.df,
-        &tag_info.category_info.names,
-    )?);
-    let category_contribs = Arc::new(tag_info.category_info.ssums.clone());
-
-    let tasks = combinations
-        .par_iter()
-        .map(|(x, y)| {
-            let sem = semaphore.clone();
-            let tag = tagging.clone();
-            let cat_val = category_values.clone();
-            let cat_con = category_contribs.clone();
-            let out = output_root.clone();
-            let x = x.clone();
-            let y = y.clone();
-            let pb = progress.clone();
-            runtime.spawn(async move {
-                let result = rg_aligned(&tag, &cat_val, &cat_con, x, y, out, sem).await;
-                pb.lock().unwrap().inc(1);
-                result
-            })
-        })
-        .collect::<Vec<_>>();
-
-    for task in tasks {
-        let result = runtime.block_on(task);
-        match result {
-            Ok(_) => {}
-            Err(e) => println!("Error: {}", e),
-        }
-    }
-
-    Ok(())
 }
