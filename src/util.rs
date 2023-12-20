@@ -66,21 +66,22 @@ fn read_predictors(path: &Path) -> Result<Vec<String>> {
 /// Check if predictors are aligned across GWAS summary statistics files
 /// If so, return the shared predictors. Aligned predictors enable much
 /// faster computation.
-pub fn check_predictors_aligned(gwas_paths: &[PathBuf]) -> Result<Option<DataFrame>> {
-    let first_series = read_predictors(&gwas_paths[0])?;
-    let first_series = Arc::new(first_series);
+pub fn check_predictors_aligned(
+    gwas_paths: &[PathBuf],
+    semaphore: &Arc<Semaphore>,
+) -> Result<Option<DataFrame>> {
+    let first_series = Arc::new(read_predictors(&gwas_paths[0])?);
 
     let gwas_paths = gwas_paths
         .iter()
         .map(|x| Arc::new(x.clone()))
         .collect::<Vec<Arc<PathBuf>>>();
 
-    let sem = Arc::new(Semaphore::new(num_cpus::get()));
     let rt = tokio::runtime::Runtime::new()?;
     let mut handles = Vec::new();
 
     for path in gwas_paths.iter().skip(1) {
-        let sem = sem.clone();
+        let sem = semaphore.clone();
         let first_series = first_series.clone();
         let path = path.clone();
         let handle = rt.spawn(async move {
