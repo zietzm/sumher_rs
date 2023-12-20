@@ -4,6 +4,7 @@ use crate::io::tagging::TagInfo;
 
 use anyhow::Result;
 use polars::prelude::*;
+use rayon::prelude::*;
 
 /// Reformat Plink summary statistics files for use with LDAK
 pub fn format_plink_sumstats<P>(gwas_path: P, output_path: P) -> Result<()>
@@ -59,17 +60,18 @@ where
 /// faster computation.
 pub fn check_predictors_aligned<P>(gwas_paths: &[P]) -> Result<Option<DataFrame>>
 where
-    P: Into<PathBuf> + Clone,
+    P: Into<PathBuf> + Clone + Sync,
 {
     let first_series = read_predictors(gwas_paths[0].clone())?;
 
     let aligned = gwas_paths
-        .iter()
+        .par_iter()
         .skip(1)
-        .try_fold(true, |acc, x| -> Result<bool> {
+        .try_fold_with(true, |acc: bool, x: &P| -> Result<bool> {
             let series = read_predictors(x.clone())?;
             Ok(acc && (series == first_series))
-        })?;
+        })
+        .try_reduce(|| true, |acc, x| Ok(acc && x))?;
 
     if aligned {
         Ok(Some(first_series.into_frame()))
