@@ -1,4 +1,4 @@
-use crate::hsq::AlignedGwasSumstats;
+use crate::io::gwas::AlignedGwasSumstats;
 
 use std::ffi::CString;
 use std::os::raw::c_char;

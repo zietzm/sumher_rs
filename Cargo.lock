@@ -1611,6 +1611,7 @@ dependencies = [
  "anyhow",
  "cc",
  "clap",
+ "crossbeam-channel",
  "csv",
  "futures",
  "glob",

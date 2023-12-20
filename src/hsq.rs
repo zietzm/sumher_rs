@@ -2,15 +2,17 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use crate::ffi::{solve_cors_wrapper, solve_sums_wrapper, SolveCorsResult, SolveSumsResult};
-use crate::io::gwas::{read_gwas_aligned, read_gwas_result};
+use crate::io::gwas::{
+    read_gwas_aligned, read_gwas_result, sumstat_processor, sumstat_reader, AlignedGwasSumstats,
+    GwasResultLine,
+};
 use crate::io::tagging::{read_tagfile, TagInfo};
 use crate::util::{align_if_possible, check_predictors_aligned, RuntimeSetup};
 
-use anyhow::{Context, Result};
+use anyhow::Result;
+use crossbeam_channel::Receiver;
 use indicatif::ProgressBar;
-use itertools::izip;
 use itertools::Itertools;
-use ndarray::Axis;
 use polars::prelude::*;
 use rayon::prelude::*;
 use serde::{Serialize, Serializer};
@@ -159,116 +161,58 @@ where
     Ok(())
 }
 
-pub struct AlignedGwasSumstats {
-    pub chisq: Vec<f64>,
-    pub sample_sizes: Vec<f64>,
-    pub rhos: Vec<f64>,
-}
-
-impl AlignedGwasSumstats {
-    pub fn new(chisq: Vec<f64>, sample_sizes: Vec<f64>, rhos: Vec<f64>) -> Self {
-        Self {
-            chisq,
-            sample_sizes,
-            rhos,
-        }
-    }
-
-    pub fn from_dataframe(df: &DataFrame) -> Result<Self> {
-        let z = df
-            .column("Z")?
-            .f64()?
-            .into_iter()
-            .collect::<Option<Vec<_>>>()
-            .context("Z column contains null values!")?;
-
-        let chisq = z.iter().map(|x| x.powi(2)).collect::<Vec<_>>();
-
-        let sample_sizes = df
-            .column("n")?
-            .cast(&DataType::Float64)?
-            .f64()?
-            .into_iter()
-            .collect::<Option<Vec<_>>>()
-            .context("n column contains null values!")?;
-
-        let rhos = izip!(z.iter(), chisq.iter(), sample_sizes.iter())
-            .map(|(z, chisq, n)| z.signum() * (chisq / (chisq + n)).sqrt())
-            .collect::<Vec<_>>();
-
-        Ok(Self::new(chisq, sample_sizes, rhos))
-    }
-}
-
-fn get_tag_vec(df: &DataFrame) -> Result<Vec<f64>> {
-    df.column("Tagging")?
-        .f64()?
-        .into_iter()
-        .collect::<Option<Vec<_>>>()
-        .context("Tagging column contains null values!")
-}
-
-fn get_cat_vec(df: &DataFrame, category_names: &[String]) -> Result<Vec<Vec<f64>>> {
-    Ok(df
-        .select(category_names.iter())?
-        .to_ndarray::<Float64Type>(IndexOrder::Fortran)?
-        .axis_iter(Axis(1))
-        .map(|x| x.to_vec())
-        .collect::<Vec<Vec<f64>>>())
-}
-
-struct SumherInput {
-    tagging: Vec<f64>,
-    gwas_sumstats: AlignedGwasSumstats,
-    category_values: Vec<Vec<f64>>,
-}
-
-impl SumherInput {
-    fn new(
-        tagging: Vec<f64>,
-        gwas_sumstats: AlignedGwasSumstats,
-        category_values: Vec<Vec<f64>>,
-    ) -> Self {
-        Self {
-            tagging,
-            gwas_sumstats,
-            category_values,
-        }
-    }
-
-    fn from_aligned(tag_info: &TagInfo, gwas_df: &DataFrame) -> Result<Self> {
-        let tagging = get_tag_vec(&tag_info.df)?;
-        let category_values = get_cat_vec(&tag_info.df, &tag_info.category_info.names)?;
-        let gwas_sumstats = AlignedGwasSumstats::from_dataframe(gwas_df)?;
-        Ok(Self::new(tagging, gwas_sumstats, category_values))
-    }
-
-    fn from_misaligned(tag_info: &TagInfo, gwas_df: &DataFrame) -> Result<Self> {
-        let full_df = gwas_df
-            .join(
-                &tag_info.df,
-                ["Predictor"],
-                ["Predictor"],
-                JoinArgs::new(JoinType::Left),
-            )?
-            .lazy()
-            .with_column(col("Z").pow(2).alias("chisq"))
-            .collect()?;
-
-        let tagging = get_tag_vec(&full_df)?;
-        let category_values = get_cat_vec(&full_df, &tag_info.category_info.names)?;
-        let gwas_sumstats = AlignedGwasSumstats::from_dataframe(&full_df)?;
-        Ok(Self::new(tagging, gwas_sumstats, category_values))
-    }
-
-    fn from_gwas_tag_info(tag_info: &TagInfo, gwas_df: &DataFrame, aligned: bool) -> Result<Self> {
-        if aligned {
-            Self::from_aligned(tag_info, gwas_df)
-        } else {
-            Self::from_misaligned(tag_info, gwas_df)
-        }
-    }
-}
+// struct SumherInput {
+//     tagging: Vec<f64>,
+//     gwas_sumstats: AlignedGwasSumstats,
+//     category_values: Vec<Vec<f64>>,
+// }
+//
+// impl SumherInput {
+//     fn new(
+//         tagging: Vec<f64>,
+//         gwas_sumstats: AlignedGwasSumstats,
+//         category_values: Vec<Vec<f64>>,
+//     ) -> Self {
+//         Self {
+//             tagging,
+//             gwas_sumstats,
+//             category_values,
+//         }
+//     }
+//
+//     fn from_aligned(tag_info: &TagInfo, gwas_df: &DataFrame) -> Result<Self> {
+//         let tagging = tag_info.tag_vec.clone();
+//         let category_values = tag_info.cat_vec.clone();
+//         let gwas_sumstats = AlignedGwasSumstats::from_dataframe(gwas_df)?;
+//         Ok(Self::new(tagging, gwas_sumstats, category_values))
+//     }
+//
+//     fn from_misaligned(tag_info: &TagInfo, gwas_df: &DataFrame) -> Result<Self> {
+//         let full_df = gwas_df
+//             .join(
+//                 &tag_info.df,
+//                 ["Predictor"],
+//                 ["Predictor"],
+//                 JoinArgs::new(JoinType::Left),
+//             )?
+//             .lazy()
+//             .with_column(col("Z").pow(2).alias("chisq"))
+//             .collect()?;
+//
+//         let tagging = tag_info.tag_vec.clone();
+//         let category_values = tag_info.cat_vec.clone();
+//         let gwas_sumstats = AlignedGwasSumstats::from_dataframe(&full_df)?;
+//         Ok(Self::new(tagging, gwas_sumstats, category_values))
+//     }
+//
+//     fn from_gwas_tag_info(tag_info: &TagInfo, gwas_df: &DataFrame, aligned: bool) -> Result<Self> {
+//         if aligned {
+//             Self::from_aligned(tag_info, gwas_df)
+//         } else {
+//             Self::from_misaligned(tag_info, gwas_df)
+//         }
+//     }
+// }
 
 struct SumcorsInput {
     tagging: Vec<f64>,
@@ -312,129 +256,128 @@ impl SumcorsInput {
         let gwas_sumstats1 = AlignedGwasSumstats::from_dataframe(&gwas_df1_aligned)?;
         let gwas_sumstats2 = AlignedGwasSumstats::from_dataframe(&gwas_df2_aligned)?;
 
-        let tagging = get_tag_vec(&full_df)?;
-        let category_values = get_cat_vec(&full_df, &tag_info.category_info.names)?;
+        let tag_info = TagInfo::from_dataframe(full_df, tag_info.category_info.clone())?;
 
         Ok(Self {
-            tagging,
+            tagging: tag_info.tag_vec,
             gwas_sumstats1,
             gwas_sumstats2,
-            category_values,
+            category_values: tag_info.cat_vec,
         })
     }
 }
 
 /// Compute heritability using LDAK across many files in parallel
-pub fn compute_hsq_parallel(
-    tag_path: &Path,
-    gwas_paths: &[PathBuf],
-    output_root: &Path,
-    runtime_setup: &RuntimeSetup,
-) -> Result<()> {
-    let mut tag_info = read_tagfile(tag_path.to_str().unwrap())?;
-
-    let pb = ProgressBar::new(gwas_paths.len() as u64);
-    pb.set_style(
-        indicatif::ProgressStyle::default_bar()
-            .template("[{elapsed_precise}] {bar:40} {pos:>7}/{len:7} ({eta}) {msg}")?
-            .progress_chars("##-"),
-    );
-    let pb = Arc::new(Mutex::new(pb));
-    let output_root = Arc::new(output_root.to_path_buf());
-
-    let alignment_info = check_predictors_aligned(gwas_paths)?;
-    let aligned = align_if_possible(&mut tag_info, alignment_info)?;
-
-    let gwas_paths = gwas_paths
-        .iter()
-        .map(|x| Arc::new(x.clone()))
-        .collect::<Vec<Arc<PathBuf>>>();
-
-    if aligned {
-        compute_hsq_aligned(runtime_setup, &tag_info, &gwas_paths, output_root, pb)
-    } else {
-        compute_hsq_misaligned(runtime_setup, &tag_info, &gwas_paths, output_root, pb)
-    }
-}
-
-fn compute_hsq_aligned(
-    runtime_setup: &RuntimeSetup,
-    tag_info: &TagInfo,
-    gwas_paths: &[Arc<PathBuf>],
-    output_root: Arc<PathBuf>,
-    progress: Arc<Mutex<ProgressBar>>,
-) -> Result<()> {
-    let tagging = Arc::new(get_tag_vec(&tag_info.df)?);
-    let category_values = Arc::new(get_cat_vec(&tag_info.df, &tag_info.category_info.names)?);
-    let category_contribs = Arc::new(tag_info.category_info.ssums.clone());
-    let category_names = Arc::new(tag_info.category_info.names.clone());
-
-    let tasks = gwas_paths
-        .par_iter()
-        .map(|x| {
-            let sem = runtime_setup.semaphore.clone();
-            let tag = tagging.clone();
-            let cat_val = category_values.clone();
-            let cat_con = category_contribs.clone();
-            let cat_names = category_names.clone();
-            let out = output_root.clone();
-            let x = x.clone();
-            let pb = progress.clone();
-            runtime_setup.runtime.spawn(async move {
-                let result = h2_aligned(&tag, &cat_val, &cat_con, &cat_names, &x, &out, sem).await;
-                pb.lock().unwrap().inc(1);
-                result
-            })
-        })
-        .collect::<Vec<_>>();
-
-    for task in tasks {
-        let result = runtime_setup.runtime.block_on(task);
-        match result {
-            Ok(_) => {}
-            Err(e) => println!("Error: {}", e),
-        }
-    }
-
-    Ok(())
-}
-
-fn compute_hsq_misaligned(
-    runtime_setup: &RuntimeSetup,
-    tag_info: &TagInfo,
-    gwas_paths: &[Arc<PathBuf>],
-    output_root: Arc<PathBuf>,
-    progress: Arc<Mutex<ProgressBar>>,
-) -> Result<()> {
-    let tag_info = Arc::new(tag_info.clone());
-
-    let tasks = gwas_paths
-        .par_iter()
-        .map(|x| {
-            let sem = runtime_setup.semaphore.clone();
-            let tag = tag_info.clone();
-            let out = output_root.clone();
-            let x = x.clone();
-            let pb = progress.clone();
-            runtime_setup.runtime.spawn(async move {
-                let result = h2_misaligned(&tag, &x, &out, sem).await;
-                pb.lock().unwrap().inc(1);
-                result
-            })
-        })
-        .collect::<Vec<_>>();
-
-    for task in tasks {
-        let result = runtime_setup.runtime.block_on(task);
-        match result {
-            Ok(_) => {}
-            Err(e) => println!("Error: {}", e),
-        }
-    }
-
-    Ok(())
-}
-
+// pub fn compute_hsq_parallel(
+//     tag_path: &Path,
+//     gwas_paths: &[PathBuf],
+//     output_root: &Path,
+//     runtime_setup: &RuntimeSetup,
+// ) -> Result<()> {
+//     let mut tag_info = read_tagfile(tag_path.to_str().unwrap())?;
+//
+//     let pb = ProgressBar::new(gwas_paths.len() as u64);
+//     pb.set_style(
+//         indicatif::ProgressStyle::default_bar()
+//             .template("[{elapsed_precise}] {bar:40} {pos:>7}/{len:7} ({eta}) {msg}")?
+//             .progress_chars("##-"),
+//     );
+//     let pb = Arc::new(Mutex::new(pb));
+//     let output_root = Arc::new(output_root.to_path_buf());
+//
+//     let alignment_info = check_predictors_aligned(gwas_paths)?;
+//     let aligned = align_if_possible(&mut tag_info, alignment_info)?;
+//
+//     let gwas_paths = gwas_paths
+//         .iter()
+//         .map(|x| Arc::new(x.clone()))
+//         .collect::<Vec<Arc<PathBuf>>>();
+//
+//     if aligned {
+//         compute_hsq_aligned(runtime_setup, &tag_info, &gwas_paths, output_root, pb)
+//     } else {
+//         compute_hsq_misaligned(runtime_setup, &tag_info, &gwas_paths, output_root, pb)
+//     }
+// }
+//
+// fn compute_hsq_aligned(
+//     runtime_setup: &RuntimeSetup,
+//     tag_info: &TagInfo,
+//     gwas_paths: &[Arc<PathBuf>],
+//     output_root: Arc<PathBuf>,
+//     progress: Arc<Mutex<ProgressBar>>,
+// ) -> Result<()> {
+//     let tagging = Arc::new(tag_info.tag_vec.clone());
+//     let category_values = Arc::new(tag_info.cat_vec.clone());
+//     let category_contribs = Arc::new(tag_info.category_info.ssums.clone());
+//     let category_names = Arc::new(tag_info.category_info.names.clone());
+//
+//     let tasks = gwas_paths
+//         .par_iter()
+//         .map(|x| {
+//             let sem = runtime_setup.semaphore.clone();
+//             let tag = tagging.clone();
+//             let cat_val = category_values.clone();
+//             let cat_con = category_contribs.clone();
+//             let cat_names = category_names.clone();
+//             let out = output_root.clone();
+//             let x = x.clone();
+//             let pb = progress.clone();
+//             runtime_setup.runtime.spawn(async move {
+//                 let result = h2_aligned(&tag, &cat_val, &cat_con, &cat_names, &x, &out, sem).await;
+//                 pb.lock().unwrap().inc(1);
+//                 result
+//             })
+//         })
+//         .collect::<Vec<_>>();
+//
+//     for task in tasks {
+//         let result = runtime_setup.runtime.block_on(task);
+//         match result {
+//             Ok(_) => {}
+//             Err(e) => println!("Error: {}", e),
+//         }
+//     }
+//
+//     Ok(())
+// }
+//
+// fn compute_hsq_misaligned(
+//     runtime_setup: &RuntimeSetup,
+//     tag_info: &TagInfo,
+//     gwas_paths: &[Arc<PathBuf>],
+//     output_root: Arc<PathBuf>,
+//     progress: Arc<Mutex<ProgressBar>>,
+// ) -> Result<()> {
+//     let tag_info = Arc::new(tag_info.clone());
+//
+//     let tasks = gwas_paths
+//         .par_iter()
+//         .map(|x| {
+//             let sem = runtime_setup.semaphore.clone();
+//             let tag = tag_info.clone();
+//             let out = output_root.clone();
+//             let x = x.clone();
+//             let pb = progress.clone();
+//             runtime_setup.runtime.spawn(async move {
+//                 let result = h2_misaligned(&tag, &x, &out, sem).await;
+//                 pb.lock().unwrap().inc(1);
+//                 result
+//             })
+//         })
+//         .collect::<Vec<_>>();
+//
+//     for task in tasks {
+//         let result = runtime_setup.runtime.block_on(task);
+//         match result {
+//             Ok(_) => {}
+//             Err(e) => println!("Error: {}", e),
+//         }
+//     }
+//
+//     Ok(())
+// }
+//
 /// Compute genetic correlations between all pairs of phenotypes using LDAK
 pub fn compute_rg_parallel(
     tag_path: &Path,
@@ -513,8 +456,8 @@ fn compute_rg_aligned(
     output_root: Arc<PathBuf>,
     progress: Arc<Mutex<ProgressBar>>,
 ) -> Result<()> {
-    let tagging = Arc::new(get_tag_vec(&tag_info.df)?);
-    let category_values = Arc::new(get_cat_vec(&tag_info.df, &tag_info.category_info.names)?);
+    let tagging = Arc::new(tag_info.tag_vec.clone());
+    let category_values = Arc::new(tag_info.cat_vec.clone());
     let category_contribs = Arc::new(tag_info.category_info.ssums.clone());
 
     let tasks = combinations
@@ -547,63 +490,63 @@ fn compute_rg_aligned(
     Ok(())
 }
 
-async fn h2_misaligned(
-    tag_info: &TagInfo,
-    gwas_path: &Path,
-    output_path: &Path,
-    semaphore: Arc<Semaphore>,
-) -> Result<()> {
-    let permit = semaphore.acquire().await?;
-    let gwas_df = read_gwas_result(gwas_path)?;
-    let input_data = SumherInput::from_gwas_tag_info(tag_info, &gwas_df, false)?;
-    let progress_path = output_path.with_extension("progress.txt");
-
-    let result = solve_sums_wrapper(
-        &input_data.tagging,
-        &input_data.gwas_sumstats.chisq,
-        &input_data.gwas_sumstats.sample_sizes,
-        &input_data.category_values,
-        &tag_info.category_info.ssums,
-        progress_path.to_str().unwrap(),
-        None,
-    );
-
-    let partitions = format_heritability(&result, &tag_info.category_info.names);
-    write_results(output_path, &partitions)?;
-    drop(permit);
-
-    Ok(())
-}
-
-async fn h2_aligned(
-    tagging: &[f64],
-    category_values: &[Vec<f64>],
-    category_contribs: &[Vec<f64>],
-    category_names: &[String],
-    gwas_path: &Path,
-    output_path: &Path,
-    semaphore: Arc<Semaphore>,
-) -> Result<()> {
-    let permit = semaphore.acquire().await?;
-    let gwas_stats = read_gwas_aligned(gwas_path)?;
-    let progress_path = output_path.with_extension("progress.txt");
-
-    let result = solve_sums_wrapper(
-        tagging,
-        &gwas_stats.chisq,
-        &gwas_stats.sample_sizes,
-        category_values,
-        category_contribs,
-        progress_path.to_str().unwrap(),
-        None,
-    );
-
-    let partitions = format_heritability(&result, category_names);
-    write_results(output_path, &partitions)?;
-    drop(permit);
-
-    Ok(())
-}
+// async fn h2_misaligned(
+//     tag_info: &TagInfo,
+//     gwas_path: &Path,
+//     output_path: &Path,
+//     semaphore: Arc<Semaphore>,
+// ) -> Result<()> {
+//     let permit = semaphore.acquire().await?;
+//     let gwas_df = read_gwas_result(gwas_path)?;
+//     let input_data = SumherInput::from_gwas_tag_info(tag_info, &gwas_df, false)?;
+//     let progress_path = output_path.with_extension("progress.txt");
+//
+//     let result = solve_sums_wrapper(
+//         &input_data.tagging,
+//         &input_data.gwas_sumstats.chisq,
+//         &input_data.gwas_sumstats.sample_sizes,
+//         &input_data.category_values,
+//         &tag_info.category_info.ssums,
+//         progress_path.to_str().unwrap(),
+//         None,
+//     );
+//
+//     let partitions = format_heritability(&result, &tag_info.category_info.names);
+//     write_results(output_path, &partitions)?;
+//     drop(permit);
+//
+//     Ok(())
+// }
+//
+// async fn h2_aligned(
+//     tagging: &[f64],
+//     category_values: &[Vec<f64>],
+//     category_contribs: &[Vec<f64>],
+//     category_names: &[String],
+//     gwas_path: &Path,
+//     output_path: &Path,
+//     semaphore: Arc<Semaphore>,
+// ) -> Result<()> {
+//     let permit = semaphore.acquire().await?;
+//     let gwas_stats = read_gwas_aligned(gwas_path)?;
+//     let progress_path = output_path.with_extension("progress.txt");
+//
+//     let result = solve_sums_wrapper(
+//         tagging,
+//         &gwas_stats.chisq,
+//         &gwas_stats.sample_sizes,
+//         category_values,
+//         category_contribs,
+//         progress_path.to_str().unwrap(),
+//         None,
+//     );
+//
+//     let partitions = format_heritability(&result, category_names);
+//     write_results(output_path, &partitions)?;
+//     drop(permit);
+//
+//     Ok(())
+// }
 
 fn format_rg_output_path(gwas_path_1: &Path, gwas_path_2: &Path, output_root: &Path) -> PathBuf {
     let f1 = gwas_path_1.file_stem().unwrap().to_str().unwrap();
@@ -684,6 +627,90 @@ async fn rg_aligned(
 
     write_results(&output_path, &partitions)?;
     drop(permit);
+
+    Ok(())
+}
+
+pub fn compute_h2(
+    tag_path: &Path,
+    gwas_paths: &[PathBuf],
+    output_root: &Path,
+    runtime_setup: &RuntimeSetup,
+) -> Result<()> {
+    let mut tag_info = read_tagfile(tag_path.to_str().unwrap())?;
+    let alignment_info = check_predictors_aligned(gwas_paths)?;
+    let aligned = align_if_possible(&mut tag_info, alignment_info)?;
+    if !aligned {
+        return Err(anyhow::anyhow!(
+            "GWAS summary statistics files are not aligned!"
+        ));
+    }
+    let tag_info = Arc::new(tag_info);
+    let predictor_order = Arc::new(tag_info.predictor_order.clone());
+    let gwas_paths = gwas_paths
+        .iter()
+        .map(|x| Arc::new(x.clone()))
+        .collect::<Vec<Arc<PathBuf>>>();
+    let output_root = Arc::new(output_root.to_path_buf());
+
+    let pb = ProgressBar::new(gwas_paths.len() as u64);
+    pb.set_style(
+        indicatif::ProgressStyle::default_bar()
+            .template("[{elapsed_precise}] {bar:40} {pos:>7}/{len:7} ({eta}) {msg}")?
+            .progress_chars("##-"),
+    );
+    let pb = Arc::new(Mutex::new(pb));
+
+    let (raw_sender, raw_receiver) = crossbeam_channel::unbounded::<Vec<GwasResultLine>>();
+    let (aligned_sender, aligned_receiver) = crossbeam_channel::unbounded::<AlignedGwasSumstats>();
+
+    std::thread::spawn(move || sumstat_reader(&gwas_paths, &raw_sender));
+
+    let mut sumstat_workers = Vec::new();
+    for _ in 0..runtime_setup.n_threads {
+        let predictor_order = predictor_order.clone();
+        let raw_receiver = raw_receiver.clone();
+        let aligned_sender = aligned_sender.clone();
+        sumstat_workers.push(std::thread::spawn(move || {
+            sumstat_processor(&predictor_order, &raw_receiver, &aligned_sender)
+        }));
+    }
+
+    let mut ldak_workers = Vec::new();
+    for _ in 0..runtime_setup.n_threads {
+        let out = output_root.clone();
+        let tag_info = tag_info.clone();
+        let aligned_receiver = aligned_receiver.clone();
+        let pb = pb.clone();
+        ldak_workers.push(std::thread::spawn(move || {
+            h2_processor(&aligned_receiver, &tag_info, &out, pb)
+        }));
+    }
+
+    Ok(())
+}
+
+fn h2_processor(
+    sumstat_receiver: &Receiver<AlignedGwasSumstats>,
+    tag_info: &TagInfo,
+    output_root: &Path,
+    progress: Arc<Mutex<ProgressBar>>,
+) -> Result<()> {
+    for sumstats in sumstat_receiver {
+        let result = solve_sums_wrapper(
+            &tag_info.tag_vec,
+            &sumstats.chisq,
+            &sumstats.sample_sizes,
+            &tag_info.category_info.ssums,
+            &tag_info.category_info.ssums,
+            output_root.to_str().unwrap(),
+            None,
+        );
+        let partitions = format_heritability(&result, &tag_info.category_info.names);
+        write_results(output_root, &partitions)?;
+
+        progress.lock().unwrap().inc(1);
+    }
 
     Ok(())
 }

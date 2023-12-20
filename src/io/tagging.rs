@@ -1,5 +1,6 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use csv::ReaderBuilder;
+use ndarray::prelude::*;
 use polars::prelude::*;
 use std::fs::File;
 use std::io::prelude::*;
@@ -108,6 +109,43 @@ fn read_category_info(filename: &str) -> Result<CategoryInfo> {
 pub struct TagInfo {
     pub df: DataFrame,
     pub category_info: CategoryInfo,
+
+    pub predictor_order: Vec<String>,
+    pub tag_vec: Vec<f64>,
+    pub cat_vec: Vec<Vec<f64>>,
+}
+
+impl TagInfo {
+    pub fn from_dataframe(df: DataFrame, category_info: CategoryInfo) -> Result<Self> {
+        let predictor_order = df
+            .column("Predictor")?
+            .utf8()?
+            .into_iter()
+            .map(|x| x.expect("Could not convert Predictor column").to_string())
+            .collect::<Vec<String>>();
+
+        let tag_vec = df
+            .column("Tagging")?
+            .f64()?
+            .into_iter()
+            .collect::<Option<Vec<f64>>>()
+            .context("Tagging column contains null values!")?;
+
+        let cat_vec = df
+            .select(category_info.names.iter())?
+            .to_ndarray::<Float64Type>(IndexOrder::Fortran)?
+            .axis_iter(Axis(1))
+            .map(|x| x.to_vec())
+            .collect::<Vec<Vec<f64>>>();
+
+        Ok(Self {
+            df,
+            category_info,
+            predictor_order,
+            tag_vec,
+            cat_vec,
+        })
+    }
 }
 
 pub fn read_tagfile(filename: &str) -> Result<TagInfo> {
@@ -139,5 +177,5 @@ pub fn read_tagfile(filename: &str) -> Result<TagInfo> {
         .with_dtypes(Some(Arc::new(schema)))
         .finish()?;
 
-    Ok(TagInfo { df, category_info })
+    TagInfo::from_dataframe(df, category_info)
 }

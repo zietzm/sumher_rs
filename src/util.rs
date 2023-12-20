@@ -10,6 +10,7 @@ use tokio::{runtime::Builder, sync::Semaphore};
 pub struct RuntimeSetup {
     pub runtime: tokio::runtime::Runtime,
     pub semaphore: Arc<Semaphore>,
+    pub n_threads: usize,
 }
 
 impl RuntimeSetup {
@@ -22,7 +23,11 @@ impl RuntimeSetup {
 
         let semaphore = Arc::new(Semaphore::new(n_threads));
 
-        RuntimeSetup { runtime, semaphore }
+        RuntimeSetup {
+            runtime,
+            semaphore,
+            n_threads,
+        }
     }
 }
 
@@ -108,12 +113,7 @@ fn compare_predictors(path: &Path, comparison: &[String]) -> Result<bool> {
 /// If so, return the shared predictors. Aligned predictors enable much
 /// faster computation.
 pub fn check_predictors_aligned(gwas_paths: &[PathBuf]) -> Result<Option<DataFrame>> {
-    let first_series = Arc::new(read_predictors(&gwas_paths[0])?);
-
-    let gwas_paths = gwas_paths
-        .iter()
-        .map(|x| Arc::new(x.clone()))
-        .collect::<Vec<Arc<PathBuf>>>();
+    let first_series = read_predictors(&gwas_paths[0])?;
 
     let pb = indicatif::ProgressBar::new((gwas_paths.len() - 1) as u64);
     pb.set_style(
@@ -130,7 +130,7 @@ pub fn check_predictors_aligned(gwas_paths: &[PathBuf]) -> Result<Option<DataFra
     }
 
     if aligned {
-        let series = Series::new("Predictor", (*first_series).clone());
+        let series = Series::new("Predictor", &first_series);
         Ok(Some(series.into_frame()))
     } else {
         Ok(None)

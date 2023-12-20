@@ -1,4 +1,5 @@
 use clap::{Args, Parser, Subcommand};
+use hsq::compute_h2;
 use std::path::PathBuf;
 
 mod ffi;
@@ -6,7 +7,7 @@ mod hsq;
 mod io;
 mod util;
 
-use crate::hsq::{compute_hsq_parallel, compute_rg_parallel};
+use crate::hsq::compute_rg_parallel;
 use crate::util::{format_plink_sumstats, RuntimeSetup};
 
 #[derive(Parser, Debug)]
@@ -109,12 +110,18 @@ fn main() {
             rg_tagfile,
         } => {
             let rt = validate_shared_args(&shared_args);
-            let result = compute_hsq_parallel(
+            let result = compute_h2(
                 &h2_tagfile,
                 &shared_args.gwas_results,
                 &shared_args.output_root,
                 &rt,
             );
+            // let result = compute_hsq_parallel(
+            //     &h2_tagfile,
+            //     &shared_args.gwas_results,
+            //     &shared_args.output_root,
+            //     &rt,
+            // );
             match result {
                 Ok(_) => println!("Success on heritability!"),
                 Err(e) => println!("Error: {}", e),
@@ -136,7 +143,7 @@ fn main() {
             tagfile,
         } => {
             let rt = validate_shared_args(&shared_args);
-            let result = compute_hsq_parallel(
+            let result = compute_h2(
                 &tagfile,
                 &shared_args.gwas_results,
                 &shared_args.output_root,
