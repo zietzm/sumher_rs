@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use crate::io::tagging::TagInfo;
 
 use anyhow::Result;
+use csv::ReaderBuilder;
 use polars::prelude::*;
 use tokio::sync::Semaphore;
 
@@ -42,14 +43,24 @@ where
 
 /// Read Predictors from LDAK-format GWAS summary statistics files
 /// Predictors are the SNP IDs, either rsIDs or chr:pos
-fn read_predictors(path: &Path) -> Result<Series, PolarsError> {
-    let df = CsvReader::from_path(path)?
-        .has_header(true)
-        .with_separator(b'\t')
-        .with_columns(Some(vec!["Predictor".to_string()]))
-        .finish()?;
+fn read_predictors(path: &Path) -> Result<Vec<String>> {
+    let mut reader = ReaderBuilder::new()
+        .has_headers(true)
+        .delimiter(b'\t')
+        .from_path(path)?;
 
-    Ok(df.column("Predictor").unwrap().clone())
+    let predictor_idx = reader
+        .headers()?
+        .iter()
+        .position(|x| x == "Predictor")
+        .ok_or_else(|| anyhow::anyhow!("Could not find Predictor column"))?;
+
+    let mut predictors = Vec::new();
+    for result in reader.records() {
+        let record = result?;
+        predictors.push(record.get(predictor_idx).unwrap().to_string());
+    }
+    Ok(predictors)
 }
 
 /// Check if predictors are aligned across GWAS summary statistics files
@@ -83,12 +94,13 @@ pub fn check_predictors_aligned(gwas_paths: &[PathBuf]) -> Result<Option<DataFra
 
     let mut aligned = true;
     for handle in handles {
-        let result: Result<bool, PolarsError> = rt.block_on(handle)?;
+        let result: Result<bool> = rt.block_on(handle)?;
         aligned = aligned && result?;
     }
 
     if aligned {
-        Ok(Some((*first_series).clone().into_frame()))
+        let series = Series::new("Predictor", (*first_series).clone());
+        Ok(Some(series.into_frame()))
     } else {
         Ok(None)
     }
