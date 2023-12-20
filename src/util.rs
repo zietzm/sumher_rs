@@ -92,7 +92,7 @@ pub fn check_predictors_aligned(
     gwas_paths: &[PathBuf],
     semaphore: &Arc<Semaphore>,
 ) -> Result<Option<DataFrame>> {
-    let first_series = read_predictors(&gwas_paths[0])?;
+    let first_series = Arc::new(read_predictors(&gwas_paths[0])?);
 
     let gwas_paths = gwas_paths
         .iter()
@@ -130,7 +130,7 @@ pub fn check_predictors_aligned(
     }
 
     if aligned {
-        let series = Series::new("Predictor", first_series);
+        let series = Series::new("Predictor", (*first_series).clone());
         Ok(Some(series.into_frame()))
     } else {
         Ok(None)
