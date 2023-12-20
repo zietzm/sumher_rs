@@ -5,7 +5,6 @@ use crate::io::tagging::TagInfo;
 use anyhow::Result;
 use csv::ReaderBuilder;
 use polars::prelude::*;
-use tokio::sync::Semaphore;
 
 /// Reformat Plink summary statistics files for use with LDAK
 pub fn format_plink_sumstats<P>(gwas_path: P, output_path: P) -> Result<()>
@@ -88,10 +87,7 @@ fn compare_predictors(path: &Path, comparison: &[String]) -> Result<bool> {
 /// Check if predictors are aligned across GWAS summary statistics files
 /// If so, return the shared predictors. Aligned predictors enable much
 /// faster computation.
-pub fn check_predictors_aligned(
-    gwas_paths: &[PathBuf],
-    semaphore: &Arc<Semaphore>,
-) -> Result<Option<DataFrame>> {
+pub fn check_predictors_aligned(gwas_paths: &[PathBuf]) -> Result<Option<DataFrame>> {
     let first_series = Arc::new(read_predictors(&gwas_paths[0])?);
 
     let gwas_paths = gwas_paths
@@ -99,23 +95,7 @@ pub fn check_predictors_aligned(
         .map(|x| Arc::new(x.clone()))
         .collect::<Vec<Arc<PathBuf>>>();
 
-    let rt = tokio::runtime::Runtime::new()?;
-    let mut handles = Vec::new();
-
-    for path in gwas_paths.iter().skip(1) {
-        let sem = semaphore.clone();
-        let first_series = first_series.clone();
-        let path = path.clone();
-        let handle = rt.spawn(async move {
-            let permit = sem.acquire().await.unwrap();
-            let aligned = compare_predictors(&path, &first_series);
-            drop(permit);
-            aligned
-        });
-        handles.push(handle);
-    }
-
-    let pb = indicatif::ProgressBar::new(handles.len() as u64);
+    let pb = indicatif::ProgressBar::new((gwas_paths.len() - 1) as u64);
     pb.set_style(
         indicatif::ProgressStyle::default_bar()
             .template("[{elapsed_precise}] {bar:40} {pos:>7}/{len:7} ({eta}) {msg}")?
@@ -123,9 +103,9 @@ pub fn check_predictors_aligned(
     );
 
     let mut aligned = true;
-    for handle in handles {
-        let result: Result<bool> = rt.block_on(handle)?;
-        aligned = aligned && result?;
+    for path in gwas_paths.iter().skip(1) {
+        let result = compare_predictors(path, &first_series)?;
+        aligned = aligned && result;
         pb.inc(1);
     }
 

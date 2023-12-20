@@ -345,7 +345,7 @@ pub fn compute_hsq_parallel(
     let pb = Arc::new(Mutex::new(pb));
     let output_root = Arc::new(output_root.to_path_buf());
 
-    let alignment_info = check_predictors_aligned(gwas_paths, &sem)?;
+    let alignment_info = check_predictors_aligned(gwas_paths)?;
     let aligned = align_if_possible(&mut tag_info, alignment_info)?;
 
     let gwas_paths = gwas_paths
@@ -466,8 +466,7 @@ pub fn compute_rg_parallel(
     let pb = Arc::new(Mutex::new(pb));
     let output_root = Arc::new(output_root.to_path_buf());
 
-    let sem2 = Arc::new(Semaphore::new(100));
-    let alignment_info = check_predictors_aligned(gwas_paths, &sem2)?;
+    let alignment_info = check_predictors_aligned(gwas_paths)?;
     let aligned = align_if_possible(&mut tag_info, alignment_info)?;
 
     if aligned {
