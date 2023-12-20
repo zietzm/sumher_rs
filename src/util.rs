@@ -63,6 +63,28 @@ fn read_predictors(path: &Path) -> Result<Vec<String>> {
     Ok(predictors)
 }
 
+fn compare_predictors(path: &Path, comparison: &[String]) -> Result<bool> {
+    let mut reader = ReaderBuilder::new()
+        .has_headers(true)
+        .delimiter(b'\t')
+        .from_path(path)?;
+
+    let predictor_idx = reader
+        .headers()?
+        .iter()
+        .position(|x| x == "Predictor")
+        .ok_or_else(|| anyhow::anyhow!("Could not find Predictor column"))?;
+
+    for (i, result) in reader.records().enumerate() {
+        let record = result?;
+        let predictor = record.get(predictor_idx).unwrap();
+        if comparison[i] != predictor {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
 /// Check if predictors are aligned across GWAS summary statistics files
 /// If so, return the shared predictors. Aligned predictors enable much
 /// faster computation.
@@ -70,7 +92,7 @@ pub fn check_predictors_aligned(
     gwas_paths: &[PathBuf],
     semaphore: &Arc<Semaphore>,
 ) -> Result<Option<DataFrame>> {
-    let first_series = Arc::new(read_predictors(&gwas_paths[0])?);
+    let first_series = read_predictors(&gwas_paths[0])?;
 
     let gwas_paths = gwas_paths
         .iter()
@@ -86,9 +108,9 @@ pub fn check_predictors_aligned(
         let path = path.clone();
         let handle = rt.spawn(async move {
             let permit = sem.acquire().await.unwrap();
-            let series = read_predictors(path.as_path());
+            let aligned = compare_predictors(&path, &first_series);
             drop(permit);
-            Ok(series? == *first_series)
+            aligned
         });
         handles.push(handle);
     }
@@ -108,7 +130,7 @@ pub fn check_predictors_aligned(
     }
 
     if aligned {
-        let series = Series::new("Predictor", (*first_series).clone());
+        let series = Series::new("Predictor", first_series);
         Ok(Some(series.into_frame()))
     } else {
         Ok(None)
