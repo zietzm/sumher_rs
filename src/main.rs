@@ -91,6 +91,10 @@ fn validate_shared_args(args: &SharedArgs) {
             args.output_root.parent().unwrap().to_str().unwrap()
         );
     }
+    rayon::ThreadPoolBuilder::new()
+        .num_threads(args.n_threads)
+        .build_global()
+        .unwrap();
 }
 
 fn main() {
@@ -107,6 +111,7 @@ fn main() {
                 &h2_tagfile,
                 &shared_args.gwas_results,
                 &shared_args.output_root,
+                shared_args.n_threads,
             );
             match result {
                 Ok(_) => println!("Success on heritability!"),
@@ -133,6 +138,7 @@ fn main() {
                 &tagfile,
                 &shared_args.gwas_results,
                 &shared_args.output_root,
+                shared_args.n_threads,
             );
             match result {
                 Ok(_) => println!("Success on heritability!"),
