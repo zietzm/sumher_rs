@@ -93,10 +93,18 @@ pub fn check_predictors_aligned(
         handles.push(handle);
     }
 
+    let pb = indicatif::ProgressBar::new(handles.len() as u64);
+    pb.set_style(
+        indicatif::ProgressStyle::default_bar()
+            .template("[{elapsed_precise}] {bar:40} {pos:>7}/{len:7} ({eta}) {msg}")?
+            .progress_chars("##-"),
+    );
+
     let mut aligned = true;
     for handle in handles {
         let result: Result<bool> = rt.block_on(handle)?;
         aligned = aligned && result?;
+        pb.inc(1);
     }
 
     if aligned {
