@@ -2,10 +2,9 @@ use std::path::{Path, PathBuf};
 
 use crate::io::tagging::TagInfo;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use polars::prelude::*;
 use tokio::sync::Semaphore;
-use tokio::task::JoinSet;
 
 /// Reformat Plink summary statistics files for use with LDAK
 pub fn format_plink_sumstats<P>(gwas_path: P, output_path: P) -> Result<()>
@@ -43,7 +42,7 @@ where
 
 /// Read Predictors from LDAK-format GWAS summary statistics files
 /// Predictors are the SNP IDs, either rsIDs or chr:pos
-fn read_predictors(path: &Path) -> Result<Series> {
+fn read_predictors(path: &Path) -> Result<Series, PolarsError> {
     let df = CsvReader::from_path(path)?
         .has_header(true)
         .with_separator(b'\t')
@@ -67,23 +66,24 @@ pub fn check_predictors_aligned(gwas_paths: &[PathBuf]) -> Result<Option<DataFra
 
     let sem = Arc::new(Semaphore::new(num_cpus::get()));
     let rt = tokio::runtime::Runtime::new()?;
+    let mut handles = Vec::new();
 
-    let mut set = JoinSet::new();
     for path in gwas_paths.iter().skip(1) {
         let sem = sem.clone();
         let first_series = first_series.clone();
         let path = path.clone();
-        set.spawn(async move {
+        let handle = rt.spawn(async move {
             let permit = sem.acquire().await.unwrap();
             let series = read_predictors(path.as_path())?;
             drop(permit);
             Ok(series == *first_series)
         });
+        handles.push(handle);
     }
 
     let mut aligned = true;
-    while let Some(result) = rt.block_on(set.join_next()) {
-        let result: Result<bool> = result.context("Error reading predictors")?;
+    for handle in handles {
+        let result: Result<bool, PolarsError> = rt.block_on(handle)?;
         aligned = aligned && result?;
     }
 
