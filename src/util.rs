@@ -86,9 +86,9 @@ pub fn check_predictors_aligned(
         let path = path.clone();
         let handle = rt.spawn(async move {
             let permit = sem.acquire().await.unwrap();
-            let series = read_predictors(path.as_path())?;
+            let series = read_predictors(path.as_path());
             drop(permit);
-            Ok(series == *first_series)
+            Ok(series? == *first_series)
         });
         handles.push(handle);
     }
