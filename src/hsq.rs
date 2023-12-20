@@ -330,11 +330,12 @@ pub fn compute_hsq_parallel(
     tag_path: &Path,
     gwas_paths: &[PathBuf],
     output_root: &Path,
+    n_permits: usize,
 ) -> Result<()> {
     let mut tag_info = read_tagfile(tag_path.to_str().unwrap())?;
 
     let rt = Runtime::new()?;
-    let sem = Arc::new(Semaphore::new(1));
+    let sem = Arc::new(Semaphore::new(n_permits));
     let pb = ProgressBar::new(gwas_paths.len() as u64);
     pb.set_style(
         indicatif::ProgressStyle::default_bar()
