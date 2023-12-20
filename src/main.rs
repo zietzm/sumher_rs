@@ -7,7 +7,7 @@ mod io;
 mod util;
 
 use crate::hsq::{compute_hsq_parallel, compute_rg_parallel};
-use crate::util::format_plink_sumstats;
+use crate::util::{format_plink_sumstats, RuntimeSetup};
 
 #[derive(Parser, Debug)]
 #[command(name = "sumher_rs")]
@@ -79,7 +79,7 @@ enum Command {
     },
 }
 
-fn validate_shared_args(args: &SharedArgs) {
+fn validate_shared_args(args: &SharedArgs) -> RuntimeSetup {
     if args.gwas_results.is_empty() {
         panic!("No GWAS results files specified");
     }
@@ -95,6 +95,8 @@ fn validate_shared_args(args: &SharedArgs) {
         .num_threads(args.n_threads)
         .build_global()
         .unwrap();
+
+    RuntimeSetup::new(args.n_threads)
 }
 
 fn main() {
@@ -106,12 +108,12 @@ fn main() {
             h2_tagfile,
             rg_tagfile,
         } => {
-            validate_shared_args(&shared_args);
+            let rt = validate_shared_args(&shared_args);
             let result = compute_hsq_parallel(
                 &h2_tagfile,
                 &shared_args.gwas_results,
                 &shared_args.output_root,
-                shared_args.n_threads,
+                &rt,
             );
             match result {
                 Ok(_) => println!("Success on heritability!"),
@@ -122,7 +124,7 @@ fn main() {
                 &rg_tagfile,
                 &shared_args.gwas_results,
                 &shared_args.output_root,
-                shared_args.n_threads,
+                &rt,
             );
             match result {
                 Ok(_) => println!("Success on genetic correlation!"),
@@ -133,12 +135,12 @@ fn main() {
             shared_args,
             tagfile,
         } => {
-            validate_shared_args(&shared_args);
+            let rt = validate_shared_args(&shared_args);
             let result = compute_hsq_parallel(
                 &tagfile,
                 &shared_args.gwas_results,
                 &shared_args.output_root,
-                shared_args.n_threads,
+                &rt,
             );
             match result {
                 Ok(_) => println!("Success on heritability!"),
@@ -149,12 +151,12 @@ fn main() {
             shared_args,
             tagfile,
         } => {
-            validate_shared_args(&shared_args);
+            let rt = validate_shared_args(&shared_args);
             let result = compute_rg_parallel(
                 &tagfile,
                 &shared_args.gwas_results,
                 &shared_args.output_root,
-                shared_args.n_threads,
+                &rt,
             );
             match result {
                 Ok(_) => println!("Success on genetic correlation!"),

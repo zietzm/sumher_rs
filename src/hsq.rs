@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 use crate::ffi::{solve_cors_wrapper, solve_sums_wrapper, SolveCorsResult, SolveSumsResult};
 use crate::io::gwas::{read_gwas_aligned, read_gwas_result};
 use crate::io::tagging::{read_tagfile, TagInfo};
-use crate::util::{align_if_possible, check_predictors_aligned};
+use crate::util::{align_if_possible, check_predictors_aligned, RuntimeSetup};
 
 use anyhow::{Context, Result};
 use indicatif::ProgressBar;
@@ -14,7 +14,6 @@ use ndarray::Axis;
 use polars::prelude::*;
 use rayon::prelude::*;
 use serde::{Serialize, Serializer};
-use tokio::runtime::Runtime;
 use tokio::sync::Semaphore;
 use tokio::task::spawn_blocking;
 
@@ -330,12 +329,10 @@ pub fn compute_hsq_parallel(
     tag_path: &Path,
     gwas_paths: &[PathBuf],
     output_root: &Path,
-    n_permits: usize,
+    runtime_setup: &RuntimeSetup,
 ) -> Result<()> {
     let mut tag_info = read_tagfile(tag_path.to_str().unwrap())?;
 
-    let rt = Runtime::new()?;
-    let sem = Arc::new(Semaphore::new(n_permits));
     let pb = ProgressBar::new(gwas_paths.len() as u64);
     pb.set_style(
         indicatif::ProgressStyle::default_bar()
@@ -354,18 +351,17 @@ pub fn compute_hsq_parallel(
         .collect::<Vec<Arc<PathBuf>>>();
 
     if aligned {
-        compute_hsq_aligned(rt, &tag_info, &gwas_paths, output_root, sem, pb)
+        compute_hsq_aligned(runtime_setup, &tag_info, &gwas_paths, output_root, pb)
     } else {
-        compute_hsq_misaligned(rt, &tag_info, &gwas_paths, output_root, sem, pb)
+        compute_hsq_misaligned(runtime_setup, &tag_info, &gwas_paths, output_root, pb)
     }
 }
 
 fn compute_hsq_aligned(
-    runtime: Runtime,
+    runtime_setup: &RuntimeSetup,
     tag_info: &TagInfo,
     gwas_paths: &[Arc<PathBuf>],
     output_root: Arc<PathBuf>,
-    semaphore: Arc<Semaphore>,
     progress: Arc<Mutex<ProgressBar>>,
 ) -> Result<()> {
     let tagging = Arc::new(get_tag_vec(&tag_info.df)?);
@@ -376,7 +372,7 @@ fn compute_hsq_aligned(
     let tasks = gwas_paths
         .par_iter()
         .map(|x| {
-            let sem = semaphore.clone();
+            let sem = runtime_setup.semaphore.clone();
             let tag = tagging.clone();
             let cat_val = category_values.clone();
             let cat_con = category_contribs.clone();
@@ -384,7 +380,7 @@ fn compute_hsq_aligned(
             let out = output_root.clone();
             let x = x.clone();
             let pb = progress.clone();
-            runtime.spawn(async move {
+            runtime_setup.runtime.spawn(async move {
                 let result = h2_aligned(&tag, &cat_val, &cat_con, &cat_names, &x, &out, sem).await;
                 pb.lock().unwrap().inc(1);
                 result
@@ -393,7 +389,7 @@ fn compute_hsq_aligned(
         .collect::<Vec<_>>();
 
     for task in tasks {
-        let result = runtime.block_on(task);
+        let result = runtime_setup.runtime.block_on(task);
         match result {
             Ok(_) => {}
             Err(e) => println!("Error: {}", e),
@@ -404,11 +400,10 @@ fn compute_hsq_aligned(
 }
 
 fn compute_hsq_misaligned(
-    runtime: Runtime,
+    runtime_setup: &RuntimeSetup,
     tag_info: &TagInfo,
     gwas_paths: &[Arc<PathBuf>],
     output_root: Arc<PathBuf>,
-    semaphore: Arc<Semaphore>,
     progress: Arc<Mutex<ProgressBar>>,
 ) -> Result<()> {
     let tag_info = Arc::new(tag_info.clone());
@@ -416,12 +411,12 @@ fn compute_hsq_misaligned(
     let tasks = gwas_paths
         .par_iter()
         .map(|x| {
-            let sem = semaphore.clone();
+            let sem = runtime_setup.semaphore.clone();
             let tag = tag_info.clone();
             let out = output_root.clone();
             let x = x.clone();
             let pb = progress.clone();
-            runtime.spawn(async move {
+            runtime_setup.runtime.spawn(async move {
                 let result = h2_misaligned(&tag, &x, &out, sem).await;
                 pb.lock().unwrap().inc(1);
                 result
@@ -430,7 +425,7 @@ fn compute_hsq_misaligned(
         .collect::<Vec<_>>();
 
     for task in tasks {
-        let result = runtime.block_on(task);
+        let result = runtime_setup.runtime.block_on(task);
         match result {
             Ok(_) => {}
             Err(e) => println!("Error: {}", e),
@@ -445,7 +440,7 @@ pub fn compute_rg_parallel(
     tag_path: &Path,
     gwas_paths: &[PathBuf],
     output_root: &Path,
-    n_permits: usize,
+    runtime_setup: &RuntimeSetup,
 ) -> Result<()> {
     let mut tag_info = read_tagfile(tag_path.to_str().unwrap())?;
 
@@ -455,8 +450,6 @@ pub fn compute_rg_parallel(
         .tuple_combinations::<(_, _)>()
         .collect::<Vec<(Arc<PathBuf>, Arc<PathBuf>)>>();
 
-    let rt = Runtime::new()?;
-    let sem = Arc::new(Semaphore::new(n_permits));
     let pb = ProgressBar::new(combinations.len() as u64);
     pb.set_style(
         indicatif::ProgressStyle::default_bar()
@@ -470,18 +463,17 @@ pub fn compute_rg_parallel(
     let aligned = align_if_possible(&mut tag_info, alignment_info)?;
 
     if aligned {
-        compute_rg_aligned(rt, &tag_info, &combinations, output_root, sem, pb)
+        compute_rg_aligned(runtime_setup, &tag_info, &combinations, output_root, pb)
     } else {
-        compute_rg_misaligned(rt, &tag_info, &combinations, output_root, sem, pb)
+        compute_rg_misaligned(runtime_setup, &tag_info, &combinations, output_root, pb)
     }
 }
 
 fn compute_rg_misaligned(
-    runtime: Runtime,
+    runtime_setup: &RuntimeSetup,
     tag_info: &TagInfo,
     combinations: &[(Arc<PathBuf>, Arc<PathBuf>)],
     output_root: Arc<PathBuf>,
-    semaphore: Arc<Semaphore>,
     progress: Arc<Mutex<ProgressBar>>,
 ) -> Result<()> {
     let tag_info = Arc::new(tag_info.clone());
@@ -489,13 +481,13 @@ fn compute_rg_misaligned(
     let tasks = combinations
         .par_iter()
         .map(|(x, y)| {
-            let sem_clone = semaphore.clone();
+            let sem_clone = runtime_setup.semaphore.clone();
             let tag_info = tag_info.clone();
             let output_root = output_root.clone();
             let x = x.clone();
             let y = y.clone();
             let pb = progress.clone();
-            runtime.spawn(async move {
+            runtime_setup.runtime.spawn(async move {
                 let result = rg_misaligned(&tag_info, x, y, output_root.as_path(), sem_clone).await;
                 pb.lock().unwrap().inc(1);
                 result
@@ -504,7 +496,7 @@ fn compute_rg_misaligned(
         .collect::<Vec<_>>();
 
     for task in tasks {
-        let result = runtime.block_on(task);
+        let result = runtime_setup.runtime.block_on(task);
         match result {
             Ok(_) => {}
             Err(e) => println!("Error: {}", e),
@@ -515,11 +507,10 @@ fn compute_rg_misaligned(
 }
 
 fn compute_rg_aligned(
-    runtime: Runtime,
+    runtime_setup: &RuntimeSetup,
     tag_info: &TagInfo,
     combinations: &[(Arc<PathBuf>, Arc<PathBuf>)],
     output_root: Arc<PathBuf>,
-    semaphore: Arc<Semaphore>,
     progress: Arc<Mutex<ProgressBar>>,
 ) -> Result<()> {
     let tagging = Arc::new(get_tag_vec(&tag_info.df)?);
@@ -529,7 +520,7 @@ fn compute_rg_aligned(
     let tasks = combinations
         .par_iter()
         .map(|(x, y)| {
-            let sem = semaphore.clone();
+            let sem = runtime_setup.semaphore.clone();
             let tag = tagging.clone();
             let cat_val = category_values.clone();
             let cat_con = category_contribs.clone();
@@ -537,7 +528,7 @@ fn compute_rg_aligned(
             let x = x.clone();
             let y = y.clone();
             let pb = progress.clone();
-            runtime.spawn(async move {
+            runtime_setup.runtime.spawn(async move {
                 let result = rg_aligned(&tag, &cat_val, &cat_con, x, y, out, sem).await;
                 pb.lock().unwrap().inc(1);
                 result
@@ -546,7 +537,7 @@ fn compute_rg_aligned(
         .collect::<Vec<_>>();
 
     for task in tasks {
-        let result = runtime.block_on(task);
+        let result = runtime_setup.runtime.block_on(task);
         match result {
             Ok(_) => {}
             Err(e) => println!("Error: {}", e),

@@ -5,6 +5,26 @@ use crate::io::tagging::TagInfo;
 use anyhow::Result;
 use csv::ReaderBuilder;
 use polars::prelude::*;
+use tokio::{runtime::Builder, sync::Semaphore};
+
+pub struct RuntimeSetup {
+    pub runtime: tokio::runtime::Runtime,
+    pub semaphore: Arc<Semaphore>,
+}
+
+impl RuntimeSetup {
+    pub fn new(n_threads: usize) -> Self {
+        let runtime = Builder::new_multi_thread()
+            .worker_threads(n_threads)
+            .enable_all()
+            .build()
+            .unwrap();
+
+        let semaphore = Arc::new(Semaphore::new(n_threads));
+
+        RuntimeSetup { runtime, semaphore }
+    }
+}
 
 /// Reformat Plink summary statistics files for use with LDAK
 pub fn format_plink_sumstats<P>(gwas_path: P, output_path: P) -> Result<()>
