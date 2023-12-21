@@ -113,6 +113,7 @@ impl AlignedGwasSumstats {
 }
 
 #[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "PascalCase")]
 pub struct GwasResultLine {
     pub predictor: String,
     pub n: f64,
