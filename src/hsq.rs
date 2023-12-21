@@ -721,7 +721,13 @@ fn h2_processor(
             .to_str()
             .unwrap();
 
-        let output_name = format!("{}.{}", output_stem, sumstats.phenotype);
+        let output_name = output_root
+            .parent()
+            .unwrap()
+            .join(format!("{}.{}", output_stem, sumstats.phenotype))
+            .to_str()
+            .unwrap()
+            .to_string();
 
         println!("Received {}", sumstats.phenotype);
         let progress_file = output_name.clone() + ".progress.txt";
