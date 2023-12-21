@@ -7,7 +7,7 @@ mod hsq;
 mod io;
 mod util;
 
-use crate::hsq::compute_rg_parallel;
+// use crate::hsq::compute_rg_parallel;
 use crate::util::{format_plink_sumstats, RuntimeSetup};
 
 #[derive(Parser, Debug)]
@@ -127,16 +127,16 @@ fn main() {
                 Err(e) => println!("Error: {}", e),
             }
 
-            let result = compute_rg_parallel(
-                &rg_tagfile,
-                &shared_args.gwas_results,
-                &shared_args.output_root,
-                &rt,
-            );
-            match result {
-                Ok(_) => println!("Success on genetic correlation!"),
-                Err(e) => println!("Error: {}", e),
-            }
+            // let result = compute_rg_parallel(
+            //     &rg_tagfile,
+            //     &shared_args.gwas_results,
+            //     &shared_args.output_root,
+            //     &rt,
+            // );
+            // match result {
+            //     Ok(_) => println!("Success on genetic correlation!"),
+            //     Err(e) => println!("Error: {}", e),
+            // }
         }
         Command::H2 {
             shared_args,
@@ -159,16 +159,16 @@ fn main() {
             tagfile,
         } => {
             let rt = validate_shared_args(&shared_args);
-            let result = compute_rg_parallel(
-                &tagfile,
-                &shared_args.gwas_results,
-                &shared_args.output_root,
-                &rt,
-            );
-            match result {
-                Ok(_) => println!("Success on genetic correlation!"),
-                Err(e) => println!("Error: {}", e),
-            }
+            // let result = compute_rg_parallel(
+            //     &tagfile,
+            //     &shared_args.gwas_results,
+            //     &shared_args.output_root,
+            //     &rt,
+            // );
+            // match result {
+            //     Ok(_) => println!("Success on genetic correlation!"),
+            //     Err(e) => println!("Error: {}", e),
+            // }
         }
         Command::Fmt {
             gwas_results,
