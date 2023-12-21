@@ -713,7 +713,7 @@ fn h2_processor(
         );
         let partitions = format_heritability(&result, &tag_info.category_info.names);
         let output_path = output_root.join(format!("{}.hsq", sumstats.phenotype));
-        write_results(output_root, &partitions)?;
+        write_results(&output_path, &partitions)?;
 
         progress.lock().unwrap().inc(1);
     }
