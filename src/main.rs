@@ -1,5 +1,5 @@
 use clap::{Args, Parser, Subcommand};
-use hsq::compute_h2;
+use glob::glob;
 use std::path::PathBuf;
 
 mod ffi;
@@ -8,6 +8,7 @@ mod io;
 mod util;
 
 // use crate::hsq::compute_rg_parallel;
+use crate::hsq::{compute_h2, compute_rg};
 use crate::util::{format_plink_sumstats, RuntimeSetup};
 
 #[derive(Parser, Debug)]
@@ -58,6 +59,10 @@ enum Command {
         /// Path to the LDAK tag file for genetic correlation (e.g. ldak.thin.hapmap.gbr.tagging)
         #[arg(long)]
         rg_tagfile: PathBuf,
+
+        /// Number of phenotypes to load into memory at once
+        #[arg(short, long, default_value_t = 100)]
+        chunk_size: usize,
     },
     /// Compute just heritabilities
     H2 {
@@ -77,13 +82,36 @@ enum Command {
         /// Path to the LDAK tag file (e.g. ldak.thin.hapmap.gbr.tagging)
         #[arg(short, long)]
         tagfile: PathBuf,
+
+        /// Number of phenotypes to load into memory at once
+        #[arg(short, long, default_value_t = 100)]
+        chunk_size: usize,
     },
 }
 
-fn validate_shared_args(args: &SharedArgs) -> RuntimeSetup {
+fn validate_shared_args(args: &mut SharedArgs) -> RuntimeSetup {
     if args.gwas_results.is_empty() {
         panic!("No GWAS results files specified");
     }
+
+    // Check whether the GWAS results files exist
+    let mut new_gwas_results = Vec::new();
+    for f in &args.gwas_results {
+        if !f.exists() {
+            if let Ok(globbed) = glob(f.to_str().unwrap()) {
+                let globbed: Vec<_> = globbed.collect();
+
+                if globbed.is_empty() {
+                    panic!("GWAS results file {} does not exist", f.to_str().unwrap());
+                }
+
+                new_gwas_results.extend(globbed.into_iter().map(|x| x.unwrap()));
+            }
+        } else {
+            new_gwas_results.push(f.clone());
+        }
+    }
+    args.gwas_results = new_gwas_results;
 
     // Check whether the directory of output_root exists
     if !args.output_root.parent().unwrap().exists() {
@@ -105,44 +133,40 @@ fn main() {
 
     match args.command {
         Command::Gcov {
-            shared_args,
+            mut shared_args,
             h2_tagfile,
             rg_tagfile,
+            chunk_size,
         } => {
-            let rt = validate_shared_args(&shared_args);
+            let rt = validate_shared_args(&mut shared_args);
             let result = compute_h2(
                 &h2_tagfile,
                 &shared_args.gwas_results,
                 &shared_args.output_root,
                 &rt,
             );
-            // let result = compute_hsq_parallel(
-            //     &h2_tagfile,
-            //     &shared_args.gwas_results,
-            //     &shared_args.output_root,
-            //     &rt,
-            // );
             match result {
                 Ok(_) => println!("Success on heritability!"),
                 Err(e) => println!("Error: {}", e),
             }
 
-            // let result = compute_rg_parallel(
-            //     &rg_tagfile,
-            //     &shared_args.gwas_results,
-            //     &shared_args.output_root,
-            //     &rt,
-            // );
-            // match result {
-            //     Ok(_) => println!("Success on genetic correlation!"),
-            //     Err(e) => println!("Error: {}", e),
-            // }
+            let rg_result = compute_rg(
+                &rg_tagfile,
+                &shared_args.gwas_results,
+                &shared_args.output_root,
+                chunk_size,
+                &rt,
+            );
+            match rg_result {
+                Ok(_) => println!("Success on genetic correlation!"),
+                Err(e) => println!("Error: {}", e),
+            }
         }
         Command::H2 {
-            shared_args,
+            mut shared_args,
             tagfile,
         } => {
-            let rt = validate_shared_args(&shared_args);
+            let rt = validate_shared_args(&mut shared_args);
             println!("Setup runtime");
             let result = compute_h2(
                 &tagfile,
@@ -156,20 +180,22 @@ fn main() {
             }
         }
         Command::Rg {
-            shared_args,
+            mut shared_args,
             tagfile,
+            chunk_size,
         } => {
-            let rt = validate_shared_args(&shared_args);
-            // let result = compute_rg_parallel(
-            //     &tagfile,
-            //     &shared_args.gwas_results,
-            //     &shared_args.output_root,
-            //     &rt,
-            // );
-            // match result {
-            //     Ok(_) => println!("Success on genetic correlation!"),
-            //     Err(e) => println!("Error: {}", e),
-            // }
+            let rt = validate_shared_args(&mut shared_args);
+            let result = compute_rg(
+                &tagfile,
+                &shared_args.gwas_results,
+                &shared_args.output_root,
+                chunk_size,
+                &rt,
+            );
+            match result {
+                Ok(_) => println!("Success on genetic correlation!"),
+                Err(e) => println!("Error: {}", e),
+            }
         }
         Command::Fmt {
             gwas_results,

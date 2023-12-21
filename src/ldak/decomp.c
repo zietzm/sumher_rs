@@ -169,8 +169,8 @@ double cg_solve(double *mat, int length, double *mat2, double *mat3, int ncol,
   return (0);
 }
 
-double eigen_invert(double *mat, int length, double *mat2, int ncol,
-                    double *mat3, int type) {
+int eigen_invert(double *mat, int length, double *mat2, int ncol, double *mat3,
+                 int type) {
   // ncol=0 - get "cholesky", ncol=-1 - get inverse, ncol>0 - solve mat X = mat3
   // ncol=0 - mat3 NULL, ncol=-1 - mat3 workspace size(mat), ncol>0 - mat3 = RHS
   // type=0 - quiet, type=1 - complain
@@ -178,7 +178,7 @@ double eigen_invert(double *mat, int length, double *mat2, int ncol,
   double det, value, alpha, beta, wkopt, *work, *mat4;
 
   if (length == 0) {
-    return (0);
+    return 0;
   }
 
   lwork = -1;
@@ -301,121 +301,6 @@ double eigen_invert(double *mat, int length, double *mat2, int ncol,
 
   return (det);
 } // end of eigen_invert
-
-////////
-
-/*
-//the single version of the eigen decomposition seems unstable
-
-float eigen_invert_single(float *mat, int length, float *mat2, int ncol, float
-*mat3, int type)
-{
-//ncol=0 - get "cholesky", ncol=-1 - get inverse, ncol>0 - solve mat X = mat3
-//ncol=0 - mat3 NULL, ncol=-1 - mat3 workspace size(mat), ncol>0 - mat3 = RHS
-//type=0 - quiet, type=1 - complain
-int i, j, count, count2, lwork, info;
-float det, value, alpha_single, beta_single, wkopt, *work, *mat4;
-
-
-if(length==0){return(0);}
-
-lwork=-1;
-ssyev_("V", "U", &length, mat, &length, mat2, &wkopt, &lwork, &info);
-if(info!=0)
-{printf("Error, eigen priming failed; please tell Doug (info %d, length
-%d)\n\n", info, length);exit(1);} lwork=(int)wkopt;
-work=malloc(sizeof(float)*lwork);
-
-ssyev_("V", "U", &length, mat, &length, mat2, work, &lwork, &info);
-if(info!=0)
-{printf("Error, eigen decomp failed; please tell Doug (info %d, length %d)\n\n",
-info, length);exit(1);} free(work);
-
-for(i=0;i<length;i++){printf("eigen %d is %f\n", i+1, mat2[i]);}
-
-//get log determinant
-det=0;count=0;
-for(i=0;i<length;i++)
-{
-if(fabs(mat2[i])>=0.000001){det+=log(fabs(mat2[i]));}
-else{det+=log(0.000001);}
-if(mat2[i]<=-0.000001){count++;}
-}
-if(count>1&&type==1){printf("Warning, %d eigenvalues are negative\n\n", count);}
-
-////////
-
-if(ncol==0)	//solve XXT = mat, return in mat - X = UE^.5
-{
-for(j=0;j<length;j++)
-{
-if(mat2[j]>0.000001)
-{
-value=pow(mat2[j],.5);
-for(i=0;i<length;i++){mat[(size_t)j*length+i]=mat[(size_t)j*length+i]*value;}
-}
-else
-{
-for(i=0;i<length;i++){mat[(size_t)j*length+i]=0;}
-}
-}
-}
-
-if(ncol==-1)	//solve X mat = I - therefore mat becomes UE^-1UT
-{
-//load U|E|^⁻.5 into mat3
-for(j=0;j<length;j++)
-{
-if(fabs(mat2[j])>0.000001)
-{
-value=pow(fabs(mat2[j]),.5);
-for(i=0;i<length;i++){mat3[(size_t)j*length+i]=mat[(size_t)j*length+i]/value;}
-}
-else
-{
-for(i=0;i<length;i++){mat3[(size_t)j*length+i]=0;}
-}
-}
-
-//get number of positive eigenvalues (eigenvalues ranked in ascending order)
-count2=length-count;
-
-if(count2>0)	//deal with last count2 vectors (positive eigenvalues)
-{
-alpha_single=1.0;beta_single=0.0;
-sgemm_("N", "T", &length, &length, &count2, &alpha_single, mat3+count*length,
-&length, mat3+count*length, &length, &beta_single, mat, &length);
-}
-
-if(count>0)	//deal with first count vectors (negative eigenvalues)
-{
-if(count2>0){alpha_single=-1.0;beta_single=1.0;}
-else{alpha_single=-1.0;beta_single=0.0;}
-sgemm_("N", "T", &length, &length, &count, &alpha_single, mat3, &length, mat3,
-&length, &beta_single, mat, &length);
-}
-}	//end of ncol=-1
-
-if(ncol>0)	//solve mat X = mat3 - X = UE^-1UT mat3
-{
-mat4=malloc(sizeof(double)*length*ncol);
-alpha_single=1.0;beta_single=0.0;
-sgemm_("T", "N", &length, &ncol, &length, &alpha_single, mat, &length, mat3,
-&length, &beta_single, mat4, &length); for(i=0;i<length;i++)
-{
-for(j=0;j<ncol;j++)
-{
-if(fabs(mat2[i])>=0.000001){mat4[(size_t)j*length+i]=mat4[(size_t)j*length+i]/mat2[i];}
-else{mat4[(size_t)j*length+i]=0;}
-}
-}
-sgemm_("N", "N", &length, &ncol, &length, &alpha_single, mat, &length, mat4,
-&length, &beta_single, mat3, &length); free(mat4);
-}
-
-return(det);
-}	//end of eigen_invert_single
-*/
 
 ////////
 

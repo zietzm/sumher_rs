@@ -146,6 +146,36 @@ impl TagInfo {
             cat_vec,
         })
     }
+
+    pub fn update_from_dataframe(&mut self, df: DataFrame) -> Result<()> {
+        let predictor_order = df
+            .column("Predictor")?
+            .utf8()?
+            .into_iter()
+            .map(|x| x.expect("Could not convert Predictor column").to_string())
+            .collect::<Vec<String>>();
+
+        let tag_vec = df
+            .column("Tagging")?
+            .f64()?
+            .into_iter()
+            .collect::<Option<Vec<f64>>>()
+            .context("Tagging column contains null values!")?;
+
+        let cat_vec = df
+            .select(self.category_info.names.iter())?
+            .to_ndarray::<Float64Type>(IndexOrder::Fortran)?
+            .axis_iter(Axis(1))
+            .map(|x| x.to_vec())
+            .collect::<Vec<Vec<f64>>>();
+
+        self.df = df;
+        self.predictor_order = predictor_order;
+        self.tag_vec = tag_vec;
+        self.cat_vec = cat_vec;
+
+        Ok(())
+    }
 }
 
 pub fn read_tagfile(filename: &str) -> Result<TagInfo> {

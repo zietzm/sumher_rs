@@ -5,29 +5,14 @@ use crate::io::tagging::TagInfo;
 use anyhow::Result;
 use csv::ReaderBuilder;
 use polars::prelude::*;
-use tokio::{runtime::Builder, sync::Semaphore};
 
 pub struct RuntimeSetup {
-    pub runtime: tokio::runtime::Runtime,
-    pub semaphore: Arc<Semaphore>,
     pub n_threads: usize,
 }
 
 impl RuntimeSetup {
     pub fn new(n_threads: usize) -> Self {
-        let runtime = Builder::new_multi_thread()
-            .worker_threads(n_threads)
-            .enable_all()
-            .build()
-            .unwrap();
-
-        let semaphore = Arc::new(Semaphore::new(n_threads));
-
-        RuntimeSetup {
-            runtime,
-            semaphore,
-            n_threads,
-        }
+        RuntimeSetup { n_threads }
     }
 }
 
@@ -142,7 +127,7 @@ pub fn align_if_possible(tag_info: &mut TagInfo, alignment: Option<DataFrame>) -
     match alignment {
         Some(shared_predictors) => {
             println!("Predictors are aligned.");
-            tag_info.df = tag_info
+            let new_df = tag_info
                 .df
                 .join(
                     &shared_predictors,
@@ -151,6 +136,7 @@ pub fn align_if_possible(tag_info: &mut TagInfo, alignment: Option<DataFrame>) -
                     JoinArgs::new(JoinType::Inner),
                 )
                 .unwrap();
+            tag_info.update_from_dataframe(new_df)?;
             Ok(true)
         }
         None => Ok(false),

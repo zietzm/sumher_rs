@@ -28,23 +28,43 @@ LDAK.  If not, see <http://www.gnu.org/licenses/>.
 #include "fortran_functions.h"
 #include "sumfuns.h"
 
-void solve_sums(double *stats, double *likes, double *cohers, double *influs,
-                int num_parts, int gcon, int cept, int num_blocks, int length,
-                int ncv, int *cvindex, double *cvexps, double *stags,
-                double **svars, double **ssums, double *snss, double *schis,
-                double tol, int maxiter, int chisol, int sflag, char *filename)
+int solve_sums(double *stats, double *likes, double *cohers, double *influs,
+               int num_parts, int gcon, int cept, int num_blocks, int length,
+               int ncv, int *cvindex, double *cvexps, double *stags,
+               double **svars, double **ssums, double *snss, double *schis,
+               double tol, int maxiter, int chisol, int sflag, char *filename)
 // sflag=0 - normal, sflag=1 - first pass, sflag=2 - second pass
 // sflag=3 - just get expectations and likelihood, sflag=4 - LDSC, sflag=5 -
 // divide+updating
 {
+
+  // printf("Num parts: %d\n", num_parts);
+  // printf("Gcon: %d\n", gcon);
+  // printf("Cept: %d\n", cept);
+  // printf("Num blocks: %d\n", num_blocks);
+  // printf("Length: %d\n", length);
+  // printf("Ncv: %d\n", ncv);
+  // printf("Tol: %f\n", tol);
+  // printf("Maxiter: %d\n", maxiter);
+  // printf("Chisol: %d\n", chisol);
+  // printf("Sflag: %d\n", sflag);
+  // printf("Filename: %s\n", filename);
+  //
   // printf("stags: ");
   // for (int i = 0; i < 5; i++) {
   //   printf("%f ", stags[i]);
   // }
   // printf("\n");
   //
+  // int n_print = 1;
+  // if (num_parts > 5) {
+  //   n_print = 5;
+  // } else {
+  //   n_print = num_parts;
+  // }
+  //
   // printf("svars: ");
-  // for (int i = 0; i < num_parts; i++) {
+  // for (int i = 0; i < n_print; i++) {
   //   for (int k = 0; k < 5; k++) {
   //     printf("%f ", svars[i][k]);
   //   }
@@ -52,7 +72,7 @@ void solve_sums(double *stats, double *likes, double *cohers, double *influs,
   // printf("\n");
   //
   // printf("ssums: ");
-  // for (int i = 0; i < num_parts; i++) {
+  // for (int i = 0; i < n_print; i++) {
   //   for (int k = 0; k < (num_parts + 2); k++) {
   //     printf("%f ", ssums[i][k]);
   //   }
@@ -70,7 +90,7 @@ void solve_sums(double *stats, double *likes, double *cohers, double *influs,
   //   printf("%f ", schis[i]);
   // }
   // printf("\n");
-
+  //
   int j, j2, p, q, q2, q3, count, count2, start, end, mark, one = 1;
   double value, value2, sum, sum2, sumsq, mean, mean2, var, alpha, beta;
 
@@ -268,7 +288,7 @@ void solve_sums(double *stats, double *likes, double *cohers, double *influs,
 
   if ((output = fopen(filename, "a")) == NULL) {
     printf("Error re-opening %s\n", filename);
-    exit(1);
+    return 1;
   }
   if (sflag == 1) {
     fprintf(output, "Solving for first %d categories\n", num_parts);
@@ -364,7 +384,7 @@ void solve_sums(double *stats, double *likes, double *cohers, double *influs,
 
     if ((output = fopen(filename, "a")) == NULL) {
       printf("Error re-opening %s\n", filename);
-      exit(1);
+      return 1;
     }
     fprintf(output, "%d\t%.6f\t", count, sumhers);
     if (gcon == 1) {
@@ -442,7 +462,11 @@ void solve_sums(double *stats, double *likes, double *cohers, double *influs,
       for (q = 0; q < total; q++) {
         thetas[q] = sXTY[q];
       }
-      (void)eigen_invert(sXTX, total, sXTX2, 1, thetas, 1);
+      int code = eigen_invert(sXTX, total, sXTX2, 1, thetas, 1);
+      if (code != 0) {
+        printf("Error in eigen_invert\n");
+        return 1;
+      }
     } else // use either single nr or multi nr (only move if good for
            // likelihood)
     {
@@ -534,7 +558,11 @@ void solve_sums(double *stats, double *likes, double *cohers, double *influs,
           }
         }
 
-        (void)eigen_invert(AI, total, AI2, -1, AI3, 1);
+        int code = eigen_invert(AI, total, AI2, -1, AI3, 1);
+        if (code != 0) {
+          printf("Error in eigen_invert\n");
+          return 1;
+        }
 
         // get proposed move
         alpha = 1.0;
@@ -808,7 +836,11 @@ void solve_sums(double *stats, double *likes, double *cohers, double *influs,
       beta = 0.0;
       dgemm_("T", "N", &total, &total, &length, &alpha, sTb, &length, sT2,
              &length, &beta, AI, &total);
-      (void)eigen_invert(AI, total, AI2, -1, AI3, 1);
+      int code = eigen_invert(AI, total, AI2, -1, AI3, 1);
+      if (code != 0) {
+        printf("Error in eigen_invert\n");
+        return 1;
+      }
 
       // AI provides variances for thetas = (cb*scale, (c-1), ca*scale) - for
       // transformed variances, must compute J invAI JT, where Jij=dnewi/dthetaj
@@ -1009,7 +1041,11 @@ void solve_sums(double *stats, double *likes, double *cohers, double *influs,
         for (q = 0; q < total; q++) {
           thetas[q] = sXTY[q];
         }
-        (void)eigen_invert(sXTX, total, sXTX2, 1, thetas, 1);
+        int code = eigen_invert(sXTX, total, sXTX2, 1, thetas, 1);
+        if (code != 0) {
+          printf("Error in eigen_invert\n");
+          return 1;
+        }
 
         // save
         gc = 1;
@@ -1150,15 +1186,14 @@ void solve_sums(double *stats, double *likes, double *cohers, double *influs,
   free(J);
   free(JAI);
   free(JAIJT);
-} // end of solve_sums
+  return 0;
+}
 
-//////////////////////////
-
-void solve_cors(double *stats, int num_parts, int gcon, int cept,
-                int num_blocks, int length, double *stags, double **svars,
-                double **ssums, double *snss, double *schis, double *srhos,
-                double *snss2, double *schis2, double *srhos2, double tol,
-                int maxiter, char *filename) {
+int solve_cors(double *stats, int num_parts, int gcon, int cept, int num_blocks,
+               int length, double *stags, double **svars, double **ssums,
+               double *snss, double *schis, double *srhos, double *snss2,
+               double *schis2, double *srhos2, double tol, int maxiter,
+               char *filename) {
   int j, q, q2, p, count, start, end, mark, one = 1;
   double sum, sum2, sum3, sumsq, mean, var, alpha, beta;
 
@@ -1231,7 +1266,7 @@ void solve_cors(double *stats, int num_parts, int gcon, int cept,
     printf("Error writing to %s; check you have permission to write and that "
            "there does not exist a folder with this name\n\n",
            filename);
-    exit(1);
+    return 1;
   }
   fclose(output);
 
@@ -1258,7 +1293,7 @@ void solve_cors(double *stats, int num_parts, int gcon, int cept,
 
   if ((output = fopen(filename, "a")) == NULL) {
     printf("Error re-opening %s\n", filename);
-    exit(1);
+    return 1;
   }
   fprintf(output, "Estimating heritabilies for Trait 1\n");
   fprintf(output, "Iter\tHer_All\t");
@@ -1309,7 +1344,11 @@ void solve_cors(double *stats, int num_parts, int gcon, int cept,
     for (q = 0; q < total2; q++) {
       thetas[q] = sXTY[q];
     }
-    (void)eigen_invert(sXTX, total2, sXTX2, 1, thetas, 1);
+    int code = eigen_invert(sXTX, total2, sXTX2, 1, thetas, 1);
+    if (code != 0) {
+      printf("Error in eigen_invert\n");
+      return 1;
+    }
 
     // get diff
     gc = 1;
@@ -1335,7 +1374,7 @@ void solve_cors(double *stats, int num_parts, int gcon, int cept,
 
     if ((output = fopen(filename, "a")) == NULL) {
       printf("Error re-opening %s\n", filename);
-      exit(1);
+      return 1;
     }
     fprintf(output, "%d\t%.6f\t", count + 1, sumhers);
     if (gcon == 1) {
@@ -1425,7 +1464,11 @@ void solve_cors(double *stats, int num_parts, int gcon, int cept,
     for (q = 0; q < total2; q++) {
       thetas[q] = sXTY[q];
     }
-    (void)eigen_invert(sXTX, total2, sXTX2, 1, thetas, 1);
+    int code = eigen_invert(sXTX, total2, sXTX2, 1, thetas, 1);
+    if (code != 0) {
+      printf("Error in eigen_invert\n");
+      return 1;
+    }
 
     // put heritabilities, their sum, gc and cept into jacks
     mark = p * (total + 4 + num_parts);
@@ -1473,7 +1516,7 @@ void solve_cors(double *stats, int num_parts, int gcon, int cept,
 
   if ((output = fopen(filename, "a")) == NULL) {
     printf("Error re-opening %s\n", filename);
-    exit(1);
+    return 1;
   }
   fprintf(output, "Estimating heritabilies for Trait 2\n");
   fprintf(output, "Iter\tHer_All\t");
@@ -1525,7 +1568,11 @@ void solve_cors(double *stats, int num_parts, int gcon, int cept,
     for (q = 0; q < total2; q++) {
       thetas[q] = sXTY[q];
     }
-    (void)eigen_invert(sXTX, total2, sXTX2, 1, thetas, 1);
+    int code = eigen_invert(sXTX, total2, sXTX2, 1, thetas, 1);
+    if (code != 0) {
+      printf("Error in eigen_invert\n");
+      return 1;
+    }
 
     // get diff
     gc2 = 1;
@@ -1551,7 +1598,7 @@ void solve_cors(double *stats, int num_parts, int gcon, int cept,
 
     if ((output = fopen(filename, "a")) == NULL) {
       printf("Error re-opening %s\n", filename);
-      exit(1);
+      return 1;
     }
     fprintf(output, "%d\t%.6f\t", count + 1, sumhers2);
     if (gcon == 1) {
@@ -1641,7 +1688,11 @@ void solve_cors(double *stats, int num_parts, int gcon, int cept,
     for (q = 0; q < total2; q++) {
       thetas[q] = sXTY[q];
     }
-    (void)eigen_invert(sXTX, total2, sXTX2, 1, thetas, 1);
+    int code = eigen_invert(sXTX, total2, sXTX2, 1, thetas, 1);
+    if (code != 0) {
+      printf("Error in eigen_invert\n");
+      return 1;
+    }
 
     // put heritabilities, their sum, gc and cept into jacks
     mark = p * (total + 4 + num_parts);
@@ -1677,7 +1728,7 @@ void solve_cors(double *stats, int num_parts, int gcon, int cept,
 
   if ((output = fopen(filename, "a")) == NULL) {
     printf("Error re-opening %s\n", filename);
-    exit(1);
+    return 1;
   }
   fprintf(output, "Estimating coheritabilies\n");
   fprintf(output, "Iter\tCoher_All\t");
@@ -1717,7 +1768,11 @@ void solve_cors(double *stats, int num_parts, int gcon, int cept,
     for (q = 0; q < total3; q++) {
       thetas[q] = sXTY[q];
     }
-    (void)eigen_invert(sXTX, total3, sXTX2, 1, thetas, 1);
+    int code = eigen_invert(sXTX, total3, sXTX2, 1, thetas, 1);
+    if (code != 0) {
+      printf("Error in eigen_invert\n");
+      return 1;
+    }
 
     // get diff
     gc = 1;
@@ -1741,7 +1796,7 @@ void solve_cors(double *stats, int num_parts, int gcon, int cept,
 
     if ((output = fopen(filename, "a")) == NULL) {
       printf("Error re-opening %s\n", filename);
-      exit(1);
+      return 1;
     }
     fprintf(output, "%d\t%.6f\t", count + 1, sumhers3);
     fprintf(output, "%.6f\t%.6f\n", diff, tol);
@@ -1833,7 +1888,11 @@ void solve_cors(double *stats, int num_parts, int gcon, int cept,
     for (q = 0; q < total3; q++) {
       thetas[q] = sXTY[q];
     }
-    (void)eigen_invert(sXTX, total3, sXTX2, 1, thetas, 1);
+    int code = eigen_invert(sXTX, total3, sXTX2, 1, thetas, 1);
+    if (code != 0) {
+      printf("Error in eigen_invert\n");
+      return 1;
+    }
 
     // put coheritabilities, their sum and the weird term into jacks
     mark = p * (total + 4 + num_parts);
@@ -1909,6 +1968,5 @@ void solve_cors(double *stats, int num_parts, int gcon, int cept,
   free(sXTYs);
   free(thetas);
   free(jacks);
-} // end of solve_cors
-
-//////////////////////////
+  return 0;
+}
