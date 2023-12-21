@@ -1,3 +1,4 @@
+use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
@@ -714,18 +715,27 @@ fn h2_processor(
     output_root: &Path,
 ) -> Result<()> {
     for sumstats in sumstat_receiver {
+        let output_stem = output_root
+            .file_stem()
+            .unwrap_or(OsStr::new("sumher_rs"))
+            .to_str()
+            .unwrap();
+
+        let output_name = format!("{}.{}", output_stem, sumstats.phenotype);
+
         println!("Received {}", sumstats.phenotype);
+        let progress_file = output_name.clone() + ".progress.txt";
         let result = solve_sums_wrapper(
             &tag_info.tag_vec,
             &sumstats.chisq,
             &sumstats.sample_sizes,
             &tag_info.category_info.ssums,
             &tag_info.category_info.ssums,
-            output_root.to_str().unwrap(),
+            &progress_file,
             None,
         );
         let partitions = format_heritability(&result, &tag_info.category_info.names);
-        let output_path = output_root.join(format!("{}.hsq", sumstats.phenotype));
+        let output_path = output_name + ".hsq";
         write_results(&output_path, &partitions)?;
         println!("Wrote {}", sumstats.phenotype);
     }
