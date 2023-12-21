@@ -182,6 +182,8 @@ pub fn process_sumstats(
         rhos.push(row.z.signum() * (chisq_i / (chisq_i + row.n)).sqrt());
     }
 
+    println!("Processed {}", raw_stats.phenotype);
+
     Ok(AlignedGwasSumstats::new(
         raw_stats.phenotype.clone(),
         chisq,

@@ -701,6 +701,7 @@ fn h2_processor(
     output_root: &Path,
 ) -> Result<()> {
     for sumstats in sumstat_receiver {
+        println!("Received {}", sumstats.phenotype);
         let result = solve_sums_wrapper(
             &tag_info.tag_vec,
             &sumstats.chisq,
@@ -713,6 +714,7 @@ fn h2_processor(
         let partitions = format_heritability(&result, &tag_info.category_info.names);
         let output_path = output_root.join(format!("{}.hsq", sumstats.phenotype));
         write_results(&output_path, &partitions)?;
+        println!("Wrote {}", sumstats.phenotype);
     }
 
     Ok(())
