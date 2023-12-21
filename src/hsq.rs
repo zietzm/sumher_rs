@@ -663,7 +663,7 @@ pub fn compute_h2(
     );
     let pb = Arc::new(Mutex::new(pb));
 
-    let (raw_sender, raw_receiver) = crossbeam_channel::bounded::<RawGwasSumstats>(25);
+    let (raw_sender, raw_receiver) = crossbeam_channel::bounded::<RawGwasSumstats>(10);
     let (aligned_sender, aligned_receiver) = crossbeam_channel::unbounded::<AlignedGwasSumstats>();
 
     let reader_process = std::thread::spawn(move || sumstat_reader(&gwas_paths, &raw_sender));
