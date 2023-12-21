@@ -261,7 +261,7 @@ fn h2_processor(
             &tag_info.category_info.ssums,
             &progress_file,
             None,
-        );
+        )?;
         let partitions = format_heritability(&result, &tag_info.category_info.names);
         let output_path = output_name + ".hsq";
         write_results(&output_path, &partitions)?;
@@ -387,7 +387,7 @@ fn rg_processor(
             &tag_info.category_info.ssums,
             &progress_file,
             None,
-        );
+        )?;
 
         let partitions = format_genetic_correlation(&result);
         let output_path = output_name + ".rg";

@@ -3,6 +3,8 @@ use crate::io::gwas::AlignedGwasSumstats;
 use std::ffi::CString;
 use std::os::raw::c_char;
 
+use anyhow::{anyhow, Result};
+
 #[link(name = "ldak")]
 extern "C" {
     fn solve_sums(
@@ -28,7 +30,7 @@ extern "C" {
         chisol: i32,
         sflag: i32,
         filename: *const c_char,
-    );
+    ) -> i32;
 
     fn solve_cors(
         stats: *mut f64,
@@ -49,7 +51,7 @@ extern "C" {
         tol: f64,
         maxiter: i32,
         filename: *const u8,
-    );
+    ) -> i32;
 }
 
 fn vec_vec_to_double_ptr_ptr(x: &[Vec<f64>]) -> Vec<*const f64> {
@@ -106,7 +108,7 @@ pub fn solve_sums_wrapper(
     category_contribs: &[Vec<f64>],
     progress_filename: &str,
     options: Option<SolveSumsOptions>,
-) -> SolveSumsResult {
+) -> Result<SolveSumsResult> {
     let gcon = options.as_ref().and_then(|x| x.gcon).unwrap_or(0);
     let cept = options.as_ref().and_then(|x| x.cept).unwrap_or(0);
     let num_parts = category_vals.len() as i32;
@@ -134,7 +136,7 @@ pub fn solve_sums_wrapper(
     let progress_filename = progress_filename.as_ptr();
 
     unsafe {
-        solve_sums(
+        let code = solve_sums(
             stats.as_mut_ptr(),
             likes.as_mut_ptr(),
             cohers.as_mut_ptr(),
@@ -158,14 +160,17 @@ pub fn solve_sums_wrapper(
             options.as_ref().and_then(|x| x.sflag).unwrap_or(0),
             progress_filename,
         );
+        if code != 0 {
+            return Err(anyhow!("solve_sums failed"));
+        }
     }
 
-    SolveSumsResult {
+    Ok(SolveSumsResult {
         stats,
         likes,
         cohers,
         influs,
-    }
+    })
 }
 
 pub fn solve_cors_wrapper(
@@ -176,7 +181,7 @@ pub fn solve_cors_wrapper(
     category_contribs: &[Vec<f64>],
     progress_filename: &str,
     options: Option<SolveCorsOptions>,
-) -> SolveCorsResult {
+) -> Result<SolveCorsResult> {
     let gcon = options.as_ref().and_then(|x| x.gcon).unwrap_or(1);
     let cept = options.as_ref().and_then(|x| x.cept).unwrap_or(0);
     let num_parts = category_vals.len() as i32;
@@ -188,7 +193,7 @@ pub fn solve_cors_wrapper(
     let ssums = vec_vec_to_double_ptr_ptr(category_contribs);
 
     unsafe {
-        solve_cors(
+        let code = solve_cors(
             stats.as_mut_ptr(),
             num_parts,
             gcon,
@@ -208,12 +213,15 @@ pub fn solve_cors_wrapper(
             options.as_ref().and_then(|x| x.maxiter).unwrap_or(100),
             progress_filename.as_ptr(),
         );
+        if code != 0 {
+            return Err(anyhow!("solve_cors failed"));
+        }
     }
 
-    SolveCorsResult {
+    Ok(SolveCorsResult {
         stats,
         num_parts,
         gcon,
         cept,
-    }
+    })
 }
