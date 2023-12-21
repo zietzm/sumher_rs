@@ -161,7 +161,6 @@ pub fn compute_h2(
     runtime_setup: &RuntimeSetup,
 ) -> Result<()> {
     let mut tag_info = read_tagfile(tag_path.to_str().unwrap())?;
-    println!("Read tagfile");
     let alignment_info = check_predictors_aligned(gwas_paths)?;
     let aligned = align_if_possible(&mut tag_info, alignment_info)?;
     if !aligned {
@@ -186,7 +185,6 @@ pub fn compute_h2(
     let (aligned_sender, aligned_receiver) = crossbeam_channel::bounded::<AlignedGwasSumstats>(10);
 
     let reader_process = std::thread::spawn(move || sumstat_reader(&gwas_paths, &raw_sender));
-    println!("Started reader");
 
     let mut sumstat_workers = Vec::new();
     for _ in 0..runtime_setup.n_threads {
@@ -197,7 +195,6 @@ pub fn compute_h2(
             sumstat_processor(&predictor_order, &raw_receiver, &aligned_sender)
         }));
     }
-    println!("Started processors");
 
     let mut ldak_workers = Vec::new();
     for _ in 0..runtime_setup.n_threads {
@@ -213,18 +210,16 @@ pub fn compute_h2(
 
     // Wait for workers to finish
     reader_process.join().unwrap()?;
-    println!("Reader finished");
 
     for worker in sumstat_workers {
         worker.join().unwrap()?;
     }
     drop(aligned_sender);
-    println!("Sumstat workers finished");
 
     for worker in ldak_workers {
         worker.join().unwrap()?;
     }
-    println!("LDAK workers finished");
+    println!("h2 workers finished");
 
     Ok(())
 }
@@ -250,7 +245,6 @@ fn h2_processor(
             .unwrap()
             .to_string();
 
-        println!("Running h2 on {}", sumstats.phenotype);
         let progress_file = output_name.clone() + ".progress.txt";
 
         let result = solve_sums_wrapper(
@@ -265,7 +259,6 @@ fn h2_processor(
         let partitions = format_heritability(&result, &tag_info.category_info.names);
         let output_path = output_name + ".hsq";
         write_results(&output_path, &partitions)?;
-        println!("Wrote {}", sumstats.phenotype);
         progress.lock().unwrap().inc(1);
     }
 
@@ -344,10 +337,12 @@ fn compute_rg_chunk(
             rg_processor(&receiver, &tag_info, &output_root, &progress)
         }));
     }
+    println!("Started rg workers");
 
     for worker in ldak_workers {
         worker.join().unwrap()?;
     }
+    println!("rg workers finished");
 
     Ok(())
 }
@@ -376,7 +371,6 @@ fn rg_processor(
             .unwrap()
             .to_string();
 
-        println!("Running rg on {} - {}", left.phenotype, right.phenotype);
         let progress_file = output_name.clone() + ".progress.txt";
 
         let result = solve_cors_wrapper(
@@ -392,7 +386,6 @@ fn rg_processor(
         let partitions = format_genetic_correlation(&result);
         let output_path = output_name + ".rg";
         write_results(&output_path, &partitions)?;
-        println!("Wrote {} - {}", left.phenotype, right.phenotype);
         progress.lock().unwrap().inc(1);
     }
 
@@ -407,7 +400,6 @@ pub fn compute_rg(
     runtime_setup: &RuntimeSetup,
 ) -> Result<()> {
     let mut tag_info = read_tagfile(tag_path.to_str().unwrap())?;
-    println!("Read tagfile");
     let alignment_info = check_predictors_aligned(gwas_paths)?;
     let aligned = align_if_possible(&mut tag_info, alignment_info)?;
     if !aligned {
@@ -430,7 +422,6 @@ pub fn compute_rg(
 
     for (i, left_chunk) in chunks.iter().enumerate() {
         let left_chunk = left_chunk.to_vec();
-        println!("Loading chunk {:?}", left_chunk);
         let left_sumstats = load_phenotypes_chunk(&left_chunk, &tag_info, runtime_setup)?;
 
         compute_rg_chunk(
@@ -442,8 +433,6 @@ pub fn compute_rg(
             pb.clone(),
             runtime_setup,
         )?;
-
-        // do_rg(&left_sumstats, &left_sumstats, false)?;
 
         for (j, right_chunk) in chunks.iter().enumerate() {
             if i >= j {

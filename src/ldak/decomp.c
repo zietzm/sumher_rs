@@ -299,7 +299,8 @@ int eigen_invert(double *mat, int length, double *mat2, int ncol, double *mat3,
     free(mat4);
   }
 
-  return (det);
+  // return (det);
+  return 0;
 } // end of eigen_invert
 
 ////////

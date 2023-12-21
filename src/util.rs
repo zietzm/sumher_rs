@@ -126,7 +126,6 @@ pub fn check_predictors_aligned(gwas_paths: &[PathBuf]) -> Result<Option<DataFra
 pub fn align_if_possible(tag_info: &mut TagInfo, alignment: Option<DataFrame>) -> Result<bool> {
     match alignment {
         Some(shared_predictors) => {
-            println!("Predictors are aligned.");
             let new_df = tag_info
                 .df
                 .join(

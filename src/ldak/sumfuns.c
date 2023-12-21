@@ -795,10 +795,15 @@ int solve_sums(double *stats, double *likes, double *cohers, double *influs,
   }
 
   if (count > 10000 || count2 > 10) {
-    printf("Warning, %d (%d) of the %d predictors have negative expected "
-           "heritability (test statistic); this suggests an over-complicated "
-           "heritability model\n\n",
-           count, count2, length);
+    if ((output = fopen(filename, "a")) == NULL) {
+      printf("Error re-opening %s\n", filename);
+      return 1;
+    }
+    fprintf(output,
+            "Warning, %d (%d) of the %d predictors have negative expected "
+            "heritability (test statistic); this suggests an over-complicated "
+            "heritability model\n\n",
+            count, count2, length);
   }
 
   if (likes != NULL) // save them
@@ -1401,8 +1406,14 @@ int solve_cors(double *stats, int num_parts, int gcon, int cept, int num_blocks,
       break;
     }
     if (count == maxiter) {
-      printf("Warning, the optimizer failed to converge within %d iterations\n",
-             maxiter);
+      if ((output = fopen(filename, "a")) == NULL) {
+        printf("Error re-opening %s\n", filename);
+        return 1;
+      }
+      fprintf(
+          output,
+          "Warning, the optimizer failed to converge within %d iterations\n",
+          maxiter);
       break;
     }
 
@@ -1625,8 +1636,14 @@ int solve_cors(double *stats, int num_parts, int gcon, int cept, int num_blocks,
       break;
     }
     if (count == maxiter) {
-      printf("Warning, the optimizer failed to converge within %d iterations\n",
-             maxiter);
+      if ((output = fopen(filename, "a")) == NULL) {
+        printf("Error re-opening %s\n", filename);
+        return 1;
+      }
+      fprintf(
+          output,
+          "Warning, the optimizer failed to converge within %d iterations\n",
+          maxiter);
       break;
     }
 
@@ -1817,8 +1834,14 @@ int solve_cors(double *stats, int num_parts, int gcon, int cept, int num_blocks,
       break;
     }
     if (count == maxiter) {
-      printf("Warning, the optimizer failed to converge within %d iterations\n",
-             maxiter);
+      if ((output = fopen(filename, "a")) == NULL) {
+        printf("Error re-opening %s\n", filename);
+        return 1;
+      }
+      fprintf(
+          output,
+          "Warning, the optimizer failed to converge within %d iterations\n",
+          maxiter);
       break;
     }
 
