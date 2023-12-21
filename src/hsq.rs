@@ -681,15 +681,15 @@ pub fn compute_h2(
         let out = output_root.clone();
         let tag_info = tag_info.clone();
         let aligned_receiver = aligned_receiver.clone();
-        let pb = pb.clone();
         ldak_workers.push(std::thread::spawn(move || {
-            h2_processor(&aligned_receiver, &tag_info, &out, pb)
+            h2_processor(&aligned_receiver, &tag_info, &out)
         }));
     }
 
     // Wait for sumstat workers to finish
-    for worker in sumstat_workers {
+    for worker in ldak_workers {
         worker.join().unwrap()?;
+        pb.lock().unwrap().inc(1);
     }
 
     Ok(())
@@ -699,7 +699,6 @@ fn h2_processor(
     sumstat_receiver: &Receiver<AlignedGwasSumstats>,
     tag_info: &TagInfo,
     output_root: &Path,
-    progress: Arc<Mutex<ProgressBar>>,
 ) -> Result<()> {
     for sumstats in sumstat_receiver {
         let result = solve_sums_wrapper(
@@ -714,8 +713,6 @@ fn h2_processor(
         let partitions = format_heritability(&result, &tag_info.category_info.names);
         let output_path = output_root.join(format!("{}.hsq", sumstats.phenotype));
         write_results(&output_path, &partitions)?;
-
-        progress.lock().unwrap().inc(1);
     }
 
     Ok(())
