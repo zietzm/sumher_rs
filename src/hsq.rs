@@ -638,6 +638,95 @@ pub fn compute_h2(
     runtime_setup: &RuntimeSetup,
 ) -> Result<()> {
     let mut tag_info = read_tagfile(tag_path.to_str().unwrap())?;
+    // let alignment_info = check_predictors_aligned(gwas_paths)?;
+    // let aligned = align_if_possible(&mut tag_info, alignment_info)?;
+    // if !aligned {
+    //     return Err(anyhow::anyhow!(
+    //         "GWAS summary statistics files are not aligned!"
+    //     ));
+    // }
+    let tag_info = Arc::new(tag_info);
+    let predictor_order = Arc::new(tag_info.predictor_order.clone());
+    let gwas_paths = gwas_paths
+        .iter()
+        .map(|x| Arc::new(x.clone()))
+        .collect::<Vec<Arc<PathBuf>>>();
+    let output_root = Arc::new(output_root.to_path_buf());
+
+    let pb = ProgressBar::new(gwas_paths.len() as u64);
+    pb.set_style(
+        indicatif::ProgressStyle::default_bar()
+            .template("[{elapsed_precise}] {bar:40} {pos:>7}/{len:7} ({eta}) {msg}")?
+            .progress_chars("##-"),
+    );
+    let pb = Arc::new(Mutex::new(pb));
+
+    let (raw_sender, raw_receiver) = crossbeam_channel::unbounded::<Vec<GwasResultLine>>();
+    let (aligned_sender, aligned_receiver) = crossbeam_channel::unbounded::<AlignedGwasSumstats>();
+
+    std::thread::spawn(move || sumstat_reader(&gwas_paths, &raw_sender));
+
+    let mut sumstat_workers = Vec::new();
+    for _ in 0..runtime_setup.n_threads {
+        let predictor_order = predictor_order.clone();
+        let raw_receiver = raw_receiver.clone();
+        let aligned_sender = aligned_sender.clone();
+        sumstat_workers.push(std::thread::spawn(move || {
+            sumstat_processor(&predictor_order, &raw_receiver, &aligned_sender)
+        }));
+    }
+
+    let mut ldak_workers = Vec::new();
+    for _ in 0..runtime_setup.n_threads {
+        let out = output_root.clone();
+        let tag_info = tag_info.clone();
+        let aligned_receiver = aligned_receiver.clone();
+        let pb = pb.clone();
+        ldak_workers.push(std::thread::spawn(move || {
+            h2_processor(&aligned_receiver, &tag_info, &out, pb)
+        }));
+    }
+
+    // Wait for sumstat workers to finish
+    for worker in sumstat_workers {
+        worker.join().unwrap()?;
+    }
+
+    Ok(())
+}
+
+fn h2_processor(
+    sumstat_receiver: &Receiver<AlignedGwasSumstats>,
+    tag_info: &TagInfo,
+    output_root: &Path,
+    progress: Arc<Mutex<ProgressBar>>,
+) -> Result<()> {
+    for sumstats in sumstat_receiver {
+        let result = solve_sums_wrapper(
+            &tag_info.tag_vec,
+            &sumstats.chisq,
+            &sumstats.sample_sizes,
+            &tag_info.category_info.ssums,
+            &tag_info.category_info.ssums,
+            output_root.to_str().unwrap(),
+            None,
+        );
+        let partitions = format_heritability(&result, &tag_info.category_info.names);
+        write_results(output_root, &partitions)?;
+
+        progress.lock().unwrap().inc(1);
+    }
+
+    Ok(())
+}
+
+pub fn compute_rg(
+    tag_path: &Path,
+    gwas_paths: &[PathBuf],
+    output_root: &Path,
+    runtime_setup: &RuntimeSetup,
+) -> Result<()> {
+    let mut tag_info = read_tagfile(tag_path.to_str().unwrap())?;
     let alignment_info = check_predictors_aligned(gwas_paths)?;
     let aligned = align_if_possible(&mut tag_info, alignment_info)?;
     if !aligned {
@@ -685,31 +774,6 @@ pub fn compute_h2(
         ldak_workers.push(std::thread::spawn(move || {
             h2_processor(&aligned_receiver, &tag_info, &out, pb)
         }));
-    }
-
-    Ok(())
-}
-
-fn h2_processor(
-    sumstat_receiver: &Receiver<AlignedGwasSumstats>,
-    tag_info: &TagInfo,
-    output_root: &Path,
-    progress: Arc<Mutex<ProgressBar>>,
-) -> Result<()> {
-    for sumstats in sumstat_receiver {
-        let result = solve_sums_wrapper(
-            &tag_info.tag_vec,
-            &sumstats.chisq,
-            &sumstats.sample_sizes,
-            &tag_info.category_info.ssums,
-            &tag_info.category_info.ssums,
-            output_root.to_str().unwrap(),
-            None,
-        );
-        let partitions = format_heritability(&result, &tag_info.category_info.names);
-        write_results(output_root, &partitions)?;
-
-        progress.lock().unwrap().inc(1);
     }
 
     Ok(())
