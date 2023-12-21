@@ -143,6 +143,7 @@ fn main() {
             tagfile,
         } => {
             let rt = validate_shared_args(&shared_args);
+            println!("Setup runtime");
             let result = compute_h2(
                 &tagfile,
                 &shared_args.gwas_results,

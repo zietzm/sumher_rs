@@ -638,6 +638,7 @@ pub fn compute_h2(
     runtime_setup: &RuntimeSetup,
 ) -> Result<()> {
     let mut tag_info = read_tagfile(tag_path.to_str().unwrap())?;
+    println!("Read tagfile");
     // let alignment_info = check_predictors_aligned(gwas_paths)?;
     // let aligned = align_if_possible(&mut tag_info, alignment_info)?;
     // if !aligned {
@@ -664,7 +665,8 @@ pub fn compute_h2(
     let (raw_sender, raw_receiver) = crossbeam_channel::unbounded::<RawGwasSumstats>();
     let (aligned_sender, aligned_receiver) = crossbeam_channel::unbounded::<AlignedGwasSumstats>();
 
-    std::thread::spawn(move || sumstat_reader(&gwas_paths, &raw_sender));
+    let reader_process = std::thread::spawn(move || sumstat_reader(&gwas_paths, &raw_sender));
+    println!("Started reader");
 
     let mut sumstat_workers = Vec::new();
     for _ in 0..runtime_setup.n_threads {
@@ -675,6 +677,7 @@ pub fn compute_h2(
             sumstat_processor(&predictor_order, &raw_receiver, &aligned_sender)
         }));
     }
+    println!("Started processors");
 
     let mut ldak_workers = Vec::new();
     for _ in 0..runtime_setup.n_threads {
@@ -685,12 +688,22 @@ pub fn compute_h2(
             h2_processor(&aligned_receiver, &tag_info, &out)
         }));
     }
+    println!("Started h2 workers");
 
-    // Wait for sumstat workers to finish
+    // Wait for workers to finish
+    reader_process.join().unwrap()?;
+    println!("Reader finished");
+
+    for worker in sumstat_workers {
+        worker.join().unwrap()?;
+    }
+    println!("Sumstat workers finished");
+
     for worker in ldak_workers {
         worker.join().unwrap()?;
         pb.lock().unwrap().inc(1);
     }
+    println!("LDAK workers finished");
 
     Ok(())
 }
