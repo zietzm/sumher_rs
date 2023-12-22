@@ -243,6 +243,7 @@ pub fn compute_h2(
             h2_processor(&aligned_receiver, &tag_info, &out, pb)
         }));
     }
+
     println!("Started h2 workers");
 
     // Wait for workers to finish
@@ -410,6 +411,12 @@ fn rg_processor(
 
         let progress_file = output_name.clone() + ".progress.txt";
 
+        let output_path = output_name + ".rg";
+        if Path::new(&output_path).exists() {
+            progress.lock().unwrap().inc(1);
+            continue;
+        }
+
         let result = solve_cors_wrapper(
             &tag_info.tag_vec,
             &left,
@@ -421,7 +428,6 @@ fn rg_processor(
         )?;
 
         let partitions = format_genetic_correlation(&result);
-        let output_path = output_name + ".rg";
         write_results(&output_path, &partitions)?;
         progress.lock().unwrap().inc(1);
     }
