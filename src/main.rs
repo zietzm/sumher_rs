@@ -120,10 +120,6 @@ fn validate_shared_args(args: &mut SharedArgs) -> RuntimeSetup {
             args.output_root.parent().unwrap().to_str().unwrap()
         );
     }
-    rayon::ThreadPoolBuilder::new()
-        .num_threads(args.n_threads)
-        .build_global()
-        .unwrap();
 
     RuntimeSetup::new(args.n_threads)
 }

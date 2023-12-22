@@ -247,6 +247,12 @@ fn h2_processor(
 
         let progress_file = output_name.clone() + ".progress.txt";
 
+        let output_path = output_name + ".hsq";
+        if Path::new(&output_path).exists() {
+            progress.lock().unwrap().inc(1);
+            continue;
+        }
+
         let result = solve_sums_wrapper(
             &tag_info.tag_vec,
             &sumstats.chisq,
@@ -257,7 +263,6 @@ fn h2_processor(
             None,
         )?;
         let partitions = format_heritability(&result, &tag_info.category_info.names);
-        let output_path = output_name + ".hsq";
         write_results(&output_path, &partitions)?;
         progress.lock().unwrap().inc(1);
     }
