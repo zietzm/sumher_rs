@@ -154,6 +154,42 @@ where
     Ok(())
 }
 
+fn filter_gwas_paths(
+    gwas_paths: &[PathBuf],
+    output_root: &Path,
+    progress: Arc<Mutex<ProgressBar>>,
+) -> Vec<PathBuf> {
+    let mut filtered = Vec::new();
+    for path in gwas_paths {
+        let output_stem = output_root
+            .file_stem()
+            .unwrap_or(OsStr::new("sumher_rs"))
+            .to_str()
+            .unwrap();
+
+        let output_name = output_root
+            .parent()
+            .unwrap()
+            .join(format!(
+                "{}.{}",
+                output_stem,
+                path.file_stem().unwrap().to_str().unwrap()
+            ))
+            .to_str()
+            .unwrap()
+            .to_string();
+
+        let output_path = output_name + ".hsq";
+        let output_path = Path::new(&output_path);
+        if output_path.exists() {
+            progress.lock().unwrap().inc(1);
+        } else {
+            filtered.push(path.clone());
+        }
+    }
+    filtered
+}
+
 pub fn compute_h2(
     tag_path: &Path,
     gwas_paths: &[PathBuf],
@@ -180,6 +216,8 @@ pub fn compute_h2(
             .progress_chars("##-"),
     );
     let pb = Arc::new(Mutex::new(pb));
+
+    let gwas_paths = filter_gwas_paths(&gwas_paths, &output_root, pb.clone());
 
     let (raw_sender, raw_receiver) = crossbeam_channel::bounded::<RawGwasSumstats>(10);
     let (aligned_sender, aligned_receiver) = crossbeam_channel::bounded::<AlignedGwasSumstats>(10);
@@ -247,12 +285,6 @@ fn h2_processor(
 
         let progress_file = output_name.clone() + ".progress.txt";
 
-        let output_path = output_name + ".hsq";
-        if Path::new(&output_path).exists() {
-            progress.lock().unwrap().inc(1);
-            continue;
-        }
-
         let result = solve_sums_wrapper(
             &tag_info.tag_vec,
             &sumstats.chisq,
@@ -263,6 +295,7 @@ fn h2_processor(
             None,
         )?;
         let partitions = format_heritability(&result, &tag_info.category_info.names);
+        let output_path = output_name + ".hsq";
         write_results(&output_path, &partitions)?;
         progress.lock().unwrap().inc(1);
     }
