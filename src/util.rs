@@ -97,7 +97,10 @@ fn compare_predictors(path: &Path, comparison: &[String]) -> Result<bool> {
 /// Check if predictors are aligned across GWAS summary statistics files
 /// If so, return the shared predictors. Aligned predictors enable much
 /// faster computation.
-pub fn check_predictors_aligned(gwas_paths: &[PathBuf]) -> Result<Option<DataFrame>> {
+pub fn check_predictors_aligned(
+    gwas_paths: &[PathBuf],
+    skip_check: bool,
+) -> Result<Option<DataFrame>> {
     let first_series = read_predictors(&gwas_paths[0])?;
 
     let pb = indicatif::ProgressBar::new((gwas_paths.len() - 1) as u64);
@@ -108,10 +111,12 @@ pub fn check_predictors_aligned(gwas_paths: &[PathBuf]) -> Result<Option<DataFra
     );
 
     let mut aligned = true;
-    for path in gwas_paths.iter().skip(1) {
-        let result = compare_predictors(path, &first_series)?;
-        aligned = aligned && result;
-        pb.inc(1);
+    if !skip_check {
+        for path in gwas_paths.iter().skip(1) {
+            let result = compare_predictors(path, &first_series)?;
+            aligned = aligned && result;
+            pb.inc(1);
+        }
     }
 
     if aligned {

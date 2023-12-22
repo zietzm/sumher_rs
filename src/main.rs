@@ -33,6 +33,10 @@ struct SharedArgs {
     /// Number of threads to use
     #[arg(short, long, default_value_t = num_cpus::get(), env = "NUM_THREADS")]
     n_threads: usize,
+
+    /// Skip checking alignment (not recommended unless you know that all files are aligned)
+    #[arg(long, default_value = "false")]
+    skip_alignment_check: bool,
 }
 
 #[derive(Debug, Subcommand)]
@@ -140,6 +144,7 @@ fn main() {
                 &shared_args.gwas_results,
                 &shared_args.output_root,
                 &rt,
+                shared_args.skip_alignment_check,
             );
             match result {
                 Ok(_) => println!("Success on heritability!"),
@@ -152,6 +157,7 @@ fn main() {
                 &shared_args.output_root,
                 chunk_size,
                 &rt,
+                shared_args.skip_alignment_check,
             );
             match rg_result {
                 Ok(_) => println!("Success on genetic correlation!"),
@@ -169,6 +175,7 @@ fn main() {
                 &shared_args.gwas_results,
                 &shared_args.output_root,
                 &rt,
+                shared_args.skip_alignment_check,
             );
             match result {
                 Ok(_) => println!("Success on heritability!"),
@@ -187,6 +194,7 @@ fn main() {
                 &shared_args.output_root,
                 chunk_size,
                 &rt,
+                shared_args.skip_alignment_check,
             );
             match result {
                 Ok(_) => println!("Success on genetic correlation!"),

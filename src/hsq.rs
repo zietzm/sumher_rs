@@ -195,6 +195,7 @@ pub fn compute_h2(
     gwas_paths: &[PathBuf],
     output_root: &Path,
     runtime_setup: &RuntimeSetup,
+    skip_alignment_check: bool,
 ) -> Result<()> {
     let output_root = Arc::new(output_root.to_path_buf());
 
@@ -207,7 +208,7 @@ pub fn compute_h2(
     let pb = Arc::new(Mutex::new(pb));
 
     let gwas_paths = filter_gwas_paths(gwas_paths, &output_root, pb.clone());
-    let alignment_info = check_predictors_aligned(&gwas_paths)?;
+    let alignment_info = check_predictors_aligned(&gwas_paths, skip_alignment_check)?;
     let mut tag_info = read_tagfile(tag_path.to_str().unwrap())?;
     let aligned = align_if_possible(&mut tag_info, alignment_info)?;
     if !aligned {
@@ -441,9 +442,10 @@ pub fn compute_rg(
     output_root: &Path,
     chunk_size: usize,
     runtime_setup: &RuntimeSetup,
+    skip_alignment_check: bool,
 ) -> Result<()> {
     let mut tag_info = read_tagfile(tag_path.to_str().unwrap())?;
-    let alignment_info = check_predictors_aligned(gwas_paths)?;
+    let alignment_info = check_predictors_aligned(gwas_paths, skip_alignment_check)?;
     let aligned = align_if_possible(&mut tag_info, alignment_info)?;
     if !aligned {
         return Err(anyhow::anyhow!(
