@@ -467,6 +467,7 @@ pub fn compute_rg(
 
     for (i, left_chunk) in chunks.iter().enumerate() {
         let left_chunk = left_chunk.to_vec();
+        println!("Processing chunk {}", i);
         let left_sumstats = load_phenotypes_chunk(&left_chunk, &tag_info, runtime_setup)?;
 
         compute_rg_chunk(
