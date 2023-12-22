@@ -245,8 +245,6 @@ pub fn compute_h2(
         }));
     }
 
-    println!("Started h2 workers");
-
     // Wait for workers to finish
     reader_process.join().unwrap()?;
 
@@ -258,7 +256,6 @@ pub fn compute_h2(
     for worker in ldak_workers {
         worker.join().unwrap()?;
     }
-    println!("h2 workers finished");
 
     Ok(())
 }
@@ -328,18 +325,13 @@ fn load_phenotypes_chunk(
             sumstat_processor(&predictor_order, &raw_receiver, &aligned_sender)
         }));
     }
-    println!("Started processor workers");
 
     reader_process.join().unwrap()?;
-
-    println!("Finished reading");
 
     for worker in sumstat_workers {
         worker.join().unwrap()?;
     }
     drop(aligned_sender);
-
-    println!("Finished processing");
 
     while let Ok(sumstat) = aligned_receiver.recv() {
         sumstats.push(Arc::new(sumstat));
@@ -351,7 +343,7 @@ fn load_phenotypes_chunk(
 fn compute_rg_chunk(
     left_chunk: &[Arc<AlignedGwasSumstats>],
     right_chunk: &[Arc<AlignedGwasSumstats>],
-    include_diag: bool,
+    only_upper_tri: bool,
     tag_info: &Arc<TagInfo>,
     output_root: &Path,
     progress: Arc<Mutex<ProgressBar>>,
@@ -362,8 +354,8 @@ fn compute_rg_chunk(
 
     // Put all combinations into the channel
     for (i, left) in left_chunk.iter().enumerate() {
-        for (j, right) in right_chunk.iter().enumerate().skip(i) {
-            if i == j && !include_diag {
+        for (j, right) in right_chunk.iter().enumerate() {
+            if i >= j && only_upper_tri {
                 continue;
             }
             sender.send((left.clone(), right.clone()))?;
@@ -381,12 +373,10 @@ fn compute_rg_chunk(
             rg_processor(&receiver, &tag_info, &output_root, &progress)
         }));
     }
-    println!("Started rg workers");
 
     for worker in ldak_workers {
         worker.join().unwrap()?;
     }
-    println!("rg workers finished");
 
     Ok(())
 }
@@ -472,14 +462,12 @@ pub fn compute_rg(
 
     for (i, left_chunk) in chunks.iter().enumerate() {
         let left_chunk = left_chunk.to_vec();
-        println!("Processing chunk {}", i);
         let left_sumstats = load_phenotypes_chunk(&left_chunk, &tag_info, runtime_setup)?;
-        println!("Loaded chunk {}", i);
 
         compute_rg_chunk(
             &left_sumstats,
             &left_sumstats,
-            false,
+            true,
             &tag_info,
             output_root,
             pb.clone(),
@@ -497,7 +485,7 @@ pub fn compute_rg(
             compute_rg_chunk(
                 &left_sumstats,
                 &right_sumstats,
-                true,
+                false,
                 &tag_info,
                 output_root,
                 pb.clone(),

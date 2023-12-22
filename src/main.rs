@@ -169,7 +169,6 @@ fn main() {
             tagfile,
         } => {
             let rt = validate_shared_args(&mut shared_args);
-            println!("Setup runtime");
             let result = compute_h2(
                 &tagfile,
                 &shared_args.gwas_results,
@@ -188,7 +187,6 @@ fn main() {
             chunk_size,
         } => {
             let rt = validate_shared_args(&mut shared_args);
-            println!("Setup runtime");
             let result = compute_rg(
                 &tagfile,
                 &shared_args.gwas_results,
