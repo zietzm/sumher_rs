@@ -328,13 +328,18 @@ fn load_phenotypes_chunk(
             sumstat_processor(&predictor_order, &raw_receiver, &aligned_sender)
         }));
     }
+    println!("Started processor workers");
 
     reader_process.join().unwrap()?;
     drop(aligned_sender);
 
+    println!("Finished reading");
+
     for worker in sumstat_workers {
         worker.join().unwrap()?;
     }
+
+    println!("Finished processing");
 
     while let Ok(sumstat) = aligned_receiver.recv() {
         sumstats.push(Arc::new(sumstat));
@@ -469,6 +474,7 @@ pub fn compute_rg(
         let left_chunk = left_chunk.to_vec();
         println!("Processing chunk {}", i);
         let left_sumstats = load_phenotypes_chunk(&left_chunk, &tag_info, runtime_setup)?;
+        println!("Loaded chunk {}", i);
 
         compute_rg_chunk(
             &left_sumstats,
