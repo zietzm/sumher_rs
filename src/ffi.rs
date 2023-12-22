@@ -50,7 +50,7 @@ extern "C" {
         srhos2: *const f64,
         tol: f64,
         maxiter: i32,
-        filename: *const u8,
+        filename: *const c_char,
     ) -> i32;
 }
 
