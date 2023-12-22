@@ -192,6 +192,9 @@ pub fn solve_cors_wrapper(
     let svars = vec_vec_to_double_ptr_ptr(category_vals);
     let ssums = vec_vec_to_double_ptr_ptr(category_contribs);
 
+    let progress_filename = CString::new(progress_filename).unwrap();
+    let progress_filename = progress_filename.as_ptr();
+
     unsafe {
         let code = solve_cors(
             stats.as_mut_ptr(),
@@ -211,7 +214,7 @@ pub fn solve_cors_wrapper(
             gwas_sumstats_2.rhos.as_ptr(),
             options.as_ref().and_then(|x| x.tol).unwrap_or(0.0001),
             options.as_ref().and_then(|x| x.maxiter).unwrap_or(100),
-            progress_filename.as_ptr(),
+            progress_filename,
         );
         if code != 0 {
             return Err(anyhow!("solve_cors failed"));
