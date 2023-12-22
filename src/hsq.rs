@@ -197,16 +197,7 @@ pub fn compute_h2(
     runtime_setup: &RuntimeSetup,
 ) -> Result<()> {
     let mut tag_info = read_tagfile(tag_path.to_str().unwrap())?;
-    let alignment_info = check_predictors_aligned(gwas_paths)?;
-    let aligned = align_if_possible(&mut tag_info, alignment_info)?;
-    if !aligned {
-        return Err(anyhow::anyhow!(
-            "GWAS summary statistics files are not aligned!"
-        ));
-    }
-    let tag_info = Arc::new(tag_info);
     let predictor_order = Arc::new(tag_info.predictor_order.clone());
-    let gwas_paths = Arc::new(gwas_paths.to_vec());
     let output_root = Arc::new(output_root.to_path_buf());
 
     let pb = ProgressBar::new(gwas_paths.len() as u64);
@@ -217,7 +208,15 @@ pub fn compute_h2(
     );
     let pb = Arc::new(Mutex::new(pb));
 
-    let gwas_paths = filter_gwas_paths(&gwas_paths, &output_root, pb.clone());
+    let gwas_paths = filter_gwas_paths(gwas_paths, &output_root, pb.clone());
+    let alignment_info = check_predictors_aligned(&gwas_paths)?;
+    let aligned = align_if_possible(&mut tag_info, alignment_info)?;
+    if !aligned {
+        return Err(anyhow::anyhow!(
+            "GWAS summary statistics files are not aligned!"
+        ));
+    }
+    let tag_info = Arc::new(tag_info);
 
     let (raw_sender, raw_receiver) = crossbeam_channel::bounded::<RawGwasSumstats>(10);
     let (aligned_sender, aligned_receiver) = crossbeam_channel::bounded::<AlignedGwasSumstats>(10);
