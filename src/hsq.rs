@@ -314,8 +314,8 @@ fn load_phenotypes_chunk(
     let mut sumstats = Vec::new();
     let mut sumstat_workers = Vec::new();
 
-    let (raw_sender, raw_receiver) = crossbeam_channel::bounded::<RawGwasSumstats>(10);
-    let (aligned_sender, aligned_receiver) = crossbeam_channel::bounded::<AlignedGwasSumstats>(10);
+    let (raw_sender, raw_receiver) = crossbeam_channel::unbounded::<RawGwasSumstats>();
+    let (aligned_sender, aligned_receiver) = crossbeam_channel::unbounded::<AlignedGwasSumstats>();
 
     let gwas_paths = Arc::new(gwas_paths.to_vec());
     let reader_process = std::thread::spawn(move || sumstat_reader(&gwas_paths, &raw_sender));
