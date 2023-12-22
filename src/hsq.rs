@@ -381,6 +381,42 @@ fn compute_rg_chunk(
     Ok(())
 }
 
+fn make_rg_output_name(
+    output_root: &Path,
+    left: &AlignedGwasSumstats,
+    right: &AlignedGwasSumstats,
+) -> String {
+    let output_stem = output_root
+        .file_stem()
+        .unwrap_or(OsStr::new("sumher_rs"))
+        .to_str()
+        .unwrap();
+
+    output_root
+        .parent()
+        .unwrap()
+        .join(format!(
+            "{}.{}.{}",
+            output_stem, left.phenotype, right.phenotype
+        ))
+        .to_str()
+        .unwrap()
+        .to_string()
+}
+
+fn rg_already_computed(
+    output_root: &Path,
+    left: &AlignedGwasSumstats,
+    right: &AlignedGwasSumstats,
+) -> bool {
+    let output_path = make_rg_output_name(output_root, left, right) + ".rg";
+    if Path::new(&output_path).exists() {
+        return true;
+    }
+    let output_path = make_rg_output_name(output_root, right, left) + ".rg";
+    Path::new(&output_path).exists()
+}
+
 fn rg_processor(
     receiver: &Receiver<(Arc<AlignedGwasSumstats>, Arc<AlignedGwasSumstats>)>,
     tag_info: &Arc<TagInfo>,
@@ -388,30 +424,14 @@ fn rg_processor(
     progress: &Arc<Mutex<ProgressBar>>,
 ) -> Result<()> {
     for (left, right) in receiver {
-        let output_stem = output_root
-            .file_stem()
-            .unwrap_or(OsStr::new("sumher_rs"))
-            .to_str()
-            .unwrap();
-
-        let output_name = output_root
-            .parent()
-            .unwrap()
-            .join(format!(
-                "{}.{}.{}",
-                output_stem, left.phenotype, right.phenotype
-            ))
-            .to_str()
-            .unwrap()
-            .to_string();
-
-        let progress_file = output_name.clone() + ".progress.txt";
-
-        let output_path = output_name + ".rg";
-        if Path::new(&output_path).exists() {
+        if rg_already_computed(output_root, &left, &right) {
             progress.lock().unwrap().inc(1);
             continue;
         }
+
+        let output_name = make_rg_output_name(output_root, &left, &right);
+        let progress_file = output_name.clone() + ".progress.txt";
+        let output_path = output_name + ".rg";
 
         let result = solve_cors_wrapper(
             &tag_info.tag_vec,
