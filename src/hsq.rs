@@ -331,13 +331,13 @@ fn load_phenotypes_chunk(
     println!("Started processor workers");
 
     reader_process.join().unwrap()?;
-    drop(aligned_sender);
 
     println!("Finished reading");
 
     for worker in sumstat_workers {
         worker.join().unwrap()?;
     }
+    drop(aligned_sender);
 
     println!("Finished processing");
 
