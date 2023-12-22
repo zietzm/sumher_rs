@@ -804,6 +804,7 @@ int solve_sums(double *stats, double *likes, double *cohers, double *influs,
             "heritability (test statistic); this suggests an over-complicated "
             "heritability model\n\n",
             count, count2, length);
+    fclose(output);
   }
 
   if (likes != NULL) // save them
@@ -1414,6 +1415,7 @@ int solve_cors(double *stats, int num_parts, int gcon, int cept, int num_blocks,
           output,
           "Warning, the optimizer failed to converge within %d iterations\n",
           maxiter);
+      fclose(output);
       break;
     }
 
@@ -1644,6 +1646,7 @@ int solve_cors(double *stats, int num_parts, int gcon, int cept, int num_blocks,
           output,
           "Warning, the optimizer failed to converge within %d iterations\n",
           maxiter);
+      fclose(output);
       break;
     }
 
@@ -1842,6 +1845,7 @@ int solve_cors(double *stats, int num_parts, int gcon, int cept, int num_blocks,
           output,
           "Warning, the optimizer failed to converge within %d iterations\n",
           maxiter);
+      fclose(output);
       break;
     }
 
