@@ -20,6 +20,7 @@ LDAK.  If not, see <http://www.gnu.org/licenses/>.
 // summary functions
 
 //////////////////////////
+#include <errno.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -1268,7 +1269,7 @@ int solve_cors(double *stats, int num_parts, int gcon, int cept, int num_blocks,
   scale3 = pow(scale, .5) * pow(scale2, .5);
 
   if ((output = fopen(filename, "a")) == NULL) {
-    printf("Error re-opening %s\n", filename);
+    printf("Error opening %s: error #: %d\n", filename, errno);
     return 1;
   }
   fprintf(output, "Estimating heritabilies for Trait 1\n");
@@ -1349,7 +1350,7 @@ int solve_cors(double *stats, int num_parts, int gcon, int cept, int num_blocks,
     // printf("%.6f\t%.6f\n", diff, tol);
 
     if ((output = fopen(filename, "a")) == NULL) {
-      printf("Error re-opening %s\n", filename);
+      printf("Error opening %s: error #: %d\n", filename, errno);
       return 1;
     }
     fprintf(output, "%d\t%.6f\t", count + 1, sumhers);
@@ -1378,7 +1379,7 @@ int solve_cors(double *stats, int num_parts, int gcon, int cept, int num_blocks,
     }
     if (count == maxiter) {
       if ((output = fopen(filename, "a")) == NULL) {
-        printf("Error re-opening %s\n", filename);
+        printf("Error opening %s: error #: %d\n", filename, errno);
         return 1;
       }
       fprintf(
@@ -1498,7 +1499,7 @@ int solve_cors(double *stats, int num_parts, int gcon, int cept, int num_blocks,
   // printf("n/a\t\t%.6f\n", tol);
 
   if ((output = fopen(filename, "a")) == NULL) {
-    printf("Error re-opening %s\n", filename);
+    printf("Error opening %s: error #: %d\n", filename, errno);
     return 1;
   }
   fprintf(output, "Estimating heritabilies for Trait 2\n");
@@ -1580,7 +1581,7 @@ int solve_cors(double *stats, int num_parts, int gcon, int cept, int num_blocks,
     // printf("%.6f\t%.6f\n", diff, tol);
 
     if ((output = fopen(filename, "a")) == NULL) {
-      printf("Error re-opening %s\n", filename);
+      printf("Error opening %s: error #: %d\n", filename, errno);
       return 1;
     }
     fprintf(output, "%d\t%.6f\t", count + 1, sumhers2);
@@ -1609,7 +1610,7 @@ int solve_cors(double *stats, int num_parts, int gcon, int cept, int num_blocks,
     }
     if (count == maxiter) {
       if ((output = fopen(filename, "a")) == NULL) {
-        printf("Error re-opening %s\n", filename);
+        printf("Error opening %s: error #: %d\n", filename, errno);
         return 1;
       }
       fprintf(
@@ -1717,7 +1718,7 @@ int solve_cors(double *stats, int num_parts, int gcon, int cept, int num_blocks,
   // printf("n/a\t\t%.6f\n", tol);
 
   if ((output = fopen(filename, "a")) == NULL) {
-    printf("Error re-opening %s\n", filename);
+    printf("Error opening %s: error #: %d\n", filename, errno);
     return 1;
   }
   fprintf(output, "Estimating coheritabilies\n");
@@ -1785,7 +1786,7 @@ int solve_cors(double *stats, int num_parts, int gcon, int cept, int num_blocks,
     // printf("%.6f\t%.6f\n", diff, tol);
 
     if ((output = fopen(filename, "a")) == NULL) {
-      printf("Error re-opening %s\n", filename);
+      printf("Error opening %s: error #: %d\n", filename, errno);
       return 1;
     }
     fprintf(output, "%d\t%.6f\t", count + 1, sumhers3);
@@ -1808,7 +1809,7 @@ int solve_cors(double *stats, int num_parts, int gcon, int cept, int num_blocks,
     }
     if (count == maxiter) {
       if ((output = fopen(filename, "a")) == NULL) {
-        printf("Error re-opening %s\n", filename);
+        printf("Error opening %s: error #: %d\n", filename, errno);
         return 1;
       }
       fprintf(
