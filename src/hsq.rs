@@ -154,6 +154,17 @@ where
     Ok(())
 }
 
+fn make_progressbar(n_total: u64) -> Arc<Mutex<ProgressBar>> {
+    let pb = ProgressBar::new(n_total);
+    pb.set_style(
+        indicatif::ProgressStyle::default_bar()
+            .template("[{elapsed_precise}] {bar:40} {pos:>7}/{len:7} ({eta}) {msg}")
+            .unwrap()
+            .progress_chars("##-"),
+    );
+    Arc::new(Mutex::new(pb))
+}
+
 fn filter_gwas_paths(
     gwas_paths: &[PathBuf],
     output_root: &Path,
@@ -199,13 +210,7 @@ pub fn compute_h2(
 ) -> Result<()> {
     let output_root = Arc::new(output_root.to_path_buf());
 
-    let pb = ProgressBar::new(gwas_paths.len() as u64);
-    pb.set_style(
-        indicatif::ProgressStyle::default_bar()
-            .template("[{elapsed_precise}] {bar:40} {pos:>7}/{len:7} ({eta}) {msg}")?
-            .progress_chars("##-"),
-    );
-    let pb = Arc::new(Mutex::new(pb));
+    let pb = make_progressbar(gwas_paths.len() as u64);
 
     let gwas_paths = filter_gwas_paths(gwas_paths, &output_root, pb.clone());
     let alignment_info = check_predictors_aligned(&gwas_paths, skip_alignment_check)?;
@@ -404,17 +409,17 @@ fn make_rg_output_name(
         .to_string()
 }
 
-fn rg_already_computed(
+fn get_rg_path_to_write(
     output_root: &Path,
     left: &AlignedGwasSumstats,
     right: &AlignedGwasSumstats,
-) -> bool {
-    let output_path = make_rg_output_name(output_root, left, right) + ".rg";
-    if Path::new(&output_path).exists() {
-        return true;
+) -> Option<String> {
+    let forward_path = make_rg_output_name(output_root, left, right) + ".rg";
+    let backward_path = make_rg_output_name(output_root, right, left) + ".rg";
+    if Path::new(&forward_path).exists() || Path::new(&backward_path).exists() {
+        return None;
     }
-    let output_path = make_rg_output_name(output_root, right, left) + ".rg";
-    Path::new(&output_path).exists()
+    Some(forward_path)
 }
 
 fn rg_processor(
@@ -424,12 +429,13 @@ fn rg_processor(
     progress: &Arc<Mutex<ProgressBar>>,
 ) -> Result<()> {
     for (left, right) in receiver {
-        if rg_already_computed(output_root, &left, &right) {
+        let output_name = get_rg_path_to_write(output_root, &left, &right);
+        if output_name.is_none() {
             progress.lock().unwrap().inc(1);
             continue;
         }
+        let output_name = output_name.unwrap();
 
-        let output_name = make_rg_output_name(output_root, &left, &right);
         let progress_file = output_name.clone() + ".progress.txt";
         let output_path = output_name + ".rg";
 
@@ -469,14 +475,8 @@ pub fn compute_rg(
     }
     let tag_info = Arc::new(tag_info);
 
-    let n_total = (gwas_paths.len() * (gwas_paths.len() - 1) / 2) as u64;
-    let pb = ProgressBar::new(n_total);
-    pb.set_style(
-        indicatif::ProgressStyle::default_bar()
-            .template("[{elapsed_precise}] {bar:40} {pos:>7}/{len:7} ({eta}) {msg}")?
-            .progress_chars("##-"),
-    );
-    let pb = Arc::new(Mutex::new(pb));
+    let n_paths = gwas_paths.len() as u64;
+    let pb = make_progressbar(n_paths * (n_paths - 1) / 2);
 
     let chunks = gwas_paths.chunks(chunk_size / 2).collect::<Vec<_>>();
 

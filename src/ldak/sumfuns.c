@@ -1267,36 +1267,6 @@ int solve_cors(double *stats, int num_parts, int gcon, int cept, int num_blocks,
   scale2 = sum2 / sum3;
   scale3 = pow(scale, .5) * pow(scale2, .5);
 
-  // deal with progress file
-  if ((output = fopen(filename, "w")) == NULL) {
-    printf("Error writing to %s; check you have permission to write and that "
-           "there does not exist a folder with this name\n\n",
-           filename);
-    return 1;
-  }
-  fclose(output);
-
-  ////////
-
-  // estimate first total2 parameter
-  // printf("Estimating heritabilies for Trait 1\n");
-  // printf("Iter\tHer_All\t");
-  // if (gcon == 1) {
-  //   printf("Scaling\t");
-  // }
-  // if (cept == 1) {
-  //   printf("Intercept\t");
-  // }
-  // printf("Difference\tTarget\n");
-  // printf("Start\t0.0000\t");
-  // if (gcon == 1) {
-  //   printf("1.0000\t");
-  // }
-  // if (cept == 1) {
-  //   printf("1.0000\t");
-  // }
-  // printf("n/a\t\t%.6f\n", tol);
-
   if ((output = fopen(filename, "a")) == NULL) {
     printf("Error re-opening %s\n", filename);
     return 1;
