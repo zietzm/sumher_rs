@@ -447,10 +447,19 @@ fn rg_processor(
             &tag_info.category_info.ssums,
             &progress_file,
             None,
-        )?;
-
-        let partitions = format_genetic_correlation(&result);
-        write_results(&output_path, &partitions)?;
+        );
+        match result {
+            Ok(result) => {
+                let partitions = format_genetic_correlation(&result);
+                write_results(&output_path, &partitions)?;
+            }
+            Err(e) => {
+                println!(
+                    "Error computing rg for {} and {}: {}",
+                    left.phenotype, right.phenotype, e
+                );
+            }
+        }
         progress.lock().unwrap().inc(1);
     }
 
