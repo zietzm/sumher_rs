@@ -286,15 +286,12 @@ fn h2_processor(
             .unwrap()
             .to_string();
 
-        let progress_file = output_name.clone() + ".progress.txt";
-
         let result = solve_sums_wrapper(
             &tag_info.tag_vec,
             &sumstats.chisq,
             &sumstats.sample_sizes,
             &tag_info.cat_vec,
             &tag_info.category_info.ssums,
-            &progress_file,
             None,
         )?;
         let partitions = format_heritability(&result, &tag_info.category_info.names);
@@ -436,7 +433,6 @@ fn rg_processor(
         }
         let output_name = output_name.unwrap();
 
-        let progress_file = output_name.clone() + ".progress.txt";
         let output_path = output_name + ".rg";
 
         let result = solve_cors_wrapper(
@@ -445,7 +441,6 @@ fn rg_processor(
             &right,
             &tag_info.cat_vec,
             &tag_info.category_info.ssums,
-            &progress_file,
             None,
         );
         match result {

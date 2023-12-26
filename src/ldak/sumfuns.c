@@ -33,7 +33,7 @@ int solve_sums(double *stats, double *likes, double *cohers, double *influs,
                int num_parts, int gcon, int cept, int num_blocks, int length,
                int ncv, int *cvindex, double *cvexps, double *stags,
                double **svars, double **ssums, double *snss, double *schis,
-               double tol, int maxiter, int chisol, int sflag, char *filename)
+               double tol, int maxiter, int chisol, int sflag)
 // sflag=0 - normal, sflag=1 - first pass, sflag=2 - second pass
 // sflag=3 - just get expectations and likelihood, sflag=4 - LDSC, sflag=5 -
 // divide+updating
@@ -100,8 +100,6 @@ int solve_sums(double *stats, double *likes, double *cohers, double *influs,
   double *thetas, *thetadiffs, *exps, *exps2, *jacks;
   double *sW, *sX, *sY, *sXTX, *sXTX2, *sXTY, *sXTXs, *sXTYs, *sT, *sTb, *sT2,
       *AI, *AI2, *AI3, *BI, *J, *JAI, *JAIJT;
-
-  FILE *output;
 
   // assuming statj = c * (1 + nja + njvj b), where c is gif, a is intercept/n,
   // b is h2SNP/ssums easier to write as (statj-1) = nj/nvj cbn + (c-1) + nj/n
@@ -277,36 +275,6 @@ int solve_sums(double *stats, double *likes, double *cohers, double *influs,
     }
   }
 
-  // prepare to screen and file print
-  // printf("Iter\tHer_All\t");
-  // if (gcon == 1) {
-  //   printf("Scaling\t");
-  // }
-  // if (cept == 1) {
-  //   printf("Intercept\t");
-  // }
-  // printf("Likelihood\tDifference\tTarget\n");
-
-  if ((output = fopen(filename, "a")) == NULL) {
-    printf("Error re-opening %s\n", filename);
-    return 1;
-  }
-  if (sflag == 1) {
-    fprintf(output, "Solving for first %d categories\n", num_parts);
-  }
-  if (sflag == 2) {
-    fprintf(output, "Solving for all %d categories\n", num_parts);
-  }
-  fprintf(output, "Iter\tHer_All\t");
-  if (gcon == 1) {
-    fprintf(output, "Scaling\t");
-  }
-  if (cept == 1) {
-    fprintf(output, "Intercept\t");
-  }
-  fprintf(output, "Likelihood\tDifference\tTarget\n");
-  fclose(output);
-
   ////////
 
   // now iterate - rflag indicates type of move
@@ -363,46 +331,6 @@ int solve_sums(double *stats, double *likes, double *cohers, double *influs,
     for (q = 0; q < num_parts; q++) {
       sumhers += thetas[q] / gc * ssums[q][q] / scale;
     }
-
-    // if (count == 0) {
-    //   printf("Start\t");
-    // } else {
-    //   printf("%d\t", count);
-    // }
-    // printf("%.4f\t", sumhers);
-    // if (gcon == 1) {
-    //   printf("%.4f\t", gc);
-    // }
-    // if (cept == 1) {
-    //   printf("%.4f\t", 1 + thetas[num_parts + gcon] / gc);
-    // }
-    // printf("%.2f\t", like);
-    // if (count == 0) {
-    //   printf("n/a\t\t%.6f\n", tol);
-    // } else {
-    //   printf("%.6f\t%.6f\n", diff, tol);
-    // }
-
-    if ((output = fopen(filename, "a")) == NULL) {
-      printf("Error re-opening %s\n", filename);
-      return 1;
-    }
-    fprintf(output, "%d\t%.6f\t", count, sumhers);
-    if (gcon == 1) {
-      fprintf(output, "%.6f\t", gc);
-    }
-    if (cept == 1) {
-      fprintf(output, "%.6f\t", 1 + thetas[num_parts + gcon] / gc);
-    }
-    if (count == 0) {
-      fprintf(output, "%.6f\tNA\t%.6f\n", like, tol);
-    } else {
-      fprintf(output, "%.6f\t%.6f\t%.6f\n", like, diff, tol);
-    }
-    fclose(output);
-
-    // see if breaking (normally can only break if rflag=0, unless at iter
-    // limit)
 
     if (sflag == 3) {
       break;
@@ -793,19 +721,6 @@ int solve_sums(double *stats, double *likes, double *cohers, double *influs,
       count2++;
       sum2 += pow(stags[j], -1);
     }
-  }
-
-  if (count > 10000 || count2 > 10) {
-    if ((output = fopen(filename, "a")) == NULL) {
-      printf("Error re-opening %s\n", filename);
-      return 1;
-    }
-    fprintf(output,
-            "Warning, %d (%d) of the %d predictors have negative expected "
-            "heritability (test statistic); this suggests an over-complicated "
-            "heritability model\n\n",
-            count, count2, length);
-    fclose(output);
   }
 
   if (likes != NULL) // save them
@@ -1199,8 +1114,7 @@ int solve_sums(double *stats, double *likes, double *cohers, double *influs,
 int solve_cors(double *stats, int num_parts, int gcon, int cept, int num_blocks,
                int length, double *stags, double **svars, double **ssums,
                double *snss, double *schis, double *srhos, double *snss2,
-               double *schis2, double *srhos2, double tol, int maxiter,
-               char *filename) {
+               double *schis2, double *srhos2, double tol, int maxiter) {
   int j, q, q2, p, count, start, end, mark, one = 1;
   double sum, sum2, sum3, sumsq, mean, var, alpha, beta;
 
@@ -1208,8 +1122,6 @@ int solve_cors(double *stats, int num_parts, int gcon, int cept, int num_blocks,
   double scale, scale2, scale3, gc, gc2, gc3, sumold, diff, sumhers, sumhers2,
       sumhers3, *snss3, *schis3, *exps, *exps2, *exps3;
   double *sW, *sX, *sY, *sXTX, *sXTX2, *sXTY, *sXTXs, *sXTYs, *thetas, *jacks;
-
-  FILE *output;
 
   // set totals and maybe num_blocks
   total = 2 * (num_parts + gcon + cept) + num_parts + 1;
@@ -1268,21 +1180,6 @@ int solve_cors(double *stats, int num_parts, int gcon, int cept, int num_blocks,
   scale2 = sum2 / sum3;
   scale3 = pow(scale, .5) * pow(scale2, .5);
 
-  if ((output = fopen(filename, "a")) == NULL) {
-    printf("Error opening %s: error #: %d\n", filename, errno);
-    return 1;
-  }
-  fprintf(output, "Estimating heritabilies for Trait 1\n");
-  fprintf(output, "Iter\tHer_All\t");
-  if (gcon == 1) {
-    fprintf(output, "Scaling\t");
-  }
-  if (cept == 1) {
-    fprintf(output, "Intercept\t");
-  }
-  fprintf(output, "Difference\tTarget\n");
-  fclose(output);
-
   // null model blank
   sumold = 0;
   for (j = 0; j < length; j++) {
@@ -1339,30 +1236,6 @@ int solve_cors(double *stats, int num_parts, int gcon, int cept, int num_blocks,
     diff = sumhers - sumold;
     sumold = sumhers;
 
-    // print update - have just got gc and sumhers
-    // printf("%d\t%.4f\t", count + 1, sumhers);
-    // if (gcon == 1) {
-    //   printf("%.4f\t", gc);
-    // }
-    // if (cept == 1) {
-    //   printf("%.4f\t", 1 + thetas[num_parts + gcon] / gc);
-    // }
-    // printf("%.6f\t%.6f\n", diff, tol);
-
-    if ((output = fopen(filename, "a")) == NULL) {
-      printf("Error opening %s: error #: %d\n", filename, errno);
-      return 1;
-    }
-    fprintf(output, "%d\t%.6f\t", count + 1, sumhers);
-    if (gcon == 1) {
-      fprintf(output, "%.6f\t", gc);
-    }
-    if (cept == 1) {
-      fprintf(output, "%.6f\t", 1 + thetas[num_parts + gcon] / gc);
-    }
-    fprintf(output, "%.6f\t%.6f\n", diff, tol);
-    fclose(output);
-
     // update exps - can use sX, but remember to multiply by sW[j] and add on
     // one
     alpha = 1.0;
@@ -1378,15 +1251,6 @@ int solve_cors(double *stats, int num_parts, int gcon, int cept, int num_blocks,
       break;
     }
     if (count == maxiter) {
-      if ((output = fopen(filename, "a")) == NULL) {
-        printf("Error opening %s: error #: %d\n", filename, errno);
-        return 1;
-      }
-      fprintf(
-          output,
-          "Warning, the optimizer failed to converge within %d iterations\n",
-          maxiter);
-      fclose(output);
       break;
     }
 
@@ -1475,43 +1339,8 @@ int solve_cors(double *stats, int num_parts, int gcon, int cept, int num_blocks,
     }
     jacks[total + mark] = sumhers;
   }
-  // printf("\n");
 
   ////////
-
-  // estimate second total2 parameters
-  // printf("Estimating heritabilies for Trait 2\n");
-  // printf("Iter\tHer_All\t");
-  // if (gcon == 1) {
-  //   printf("Scaling\t");
-  // }
-  // if (cept == 1) {
-  //   printf("Intercept\t");
-  // }
-  // printf("Difference\tTarget\n");
-  // printf("Start\t0.0000\t");
-  // if (gcon == 1) {
-  //   printf("1.0000\t");
-  // }
-  // if (cept == 1) {
-  //   printf("1.0000\t");
-  // }
-  // printf("n/a\t\t%.6f\n", tol);
-
-  if ((output = fopen(filename, "a")) == NULL) {
-    printf("Error opening %s: error #: %d\n", filename, errno);
-    return 1;
-  }
-  fprintf(output, "Estimating heritabilies for Trait 2\n");
-  fprintf(output, "Iter\tHer_All\t");
-  if (gcon == 1) {
-    fprintf(output, "Scaling\t");
-  }
-  if (cept == 1) {
-    fprintf(output, "Intercept\t");
-  }
-  fprintf(output, "Difference\tTarget\n");
-  fclose(output);
 
   // null model blank
   sumold = 0;
@@ -1570,30 +1399,6 @@ int solve_cors(double *stats, int num_parts, int gcon, int cept, int num_blocks,
     diff = sumhers2 - sumold;
     sumold = sumhers2;
 
-    // print update - have just got gc2 and sumhers2
-    // printf("%d\t%.4f\t", count + 1, sumhers2);
-    // if (gcon == 1) {
-    //   printf("%.4f\t", gc2);
-    // }
-    // if (cept == 1) {
-    //   printf("%.4f\t", 1 + thetas[num_parts + gcon] / gc2);
-    // }
-    // printf("%.6f\t%.6f\n", diff, tol);
-
-    if ((output = fopen(filename, "a")) == NULL) {
-      printf("Error opening %s: error #: %d\n", filename, errno);
-      return 1;
-    }
-    fprintf(output, "%d\t%.6f\t", count + 1, sumhers2);
-    if (gcon == 1) {
-      fprintf(output, "%.6f\t", gc2);
-    }
-    if (cept == 1) {
-      fprintf(output, "%.6f\t", 1 + thetas[num_parts + gcon] / gc2);
-    }
-    fprintf(output, "%.6f\t%.6f\n", diff, tol);
-    fclose(output);
-
     // update exps2 - can use sX, but remember to multiply by sW[j] and add on
     // one
     alpha = 1.0;
@@ -1609,15 +1414,6 @@ int solve_cors(double *stats, int num_parts, int gcon, int cept, int num_blocks,
       break;
     }
     if (count == maxiter) {
-      if ((output = fopen(filename, "a")) == NULL) {
-        printf("Error opening %s: error #: %d\n", filename, errno);
-        return 1;
-      }
-      fprintf(
-          output,
-          "Warning, the optimizer failed to converge within %d iterations\n",
-          maxiter);
-      fclose(output);
       break;
     }
 
@@ -1710,22 +1506,6 @@ int solve_cors(double *stats, int num_parts, int gcon, int cept, int num_blocks,
 
   ////////
 
-  // estimate final total3 parameters
-  // printf("Estimating coheritabilies\n");
-  // printf("Iter\tCoh_All\t");
-  // printf("Difference\tTarget\n");
-  // printf("Start\t0.0000\t");
-  // printf("n/a\t\t%.6f\n", tol);
-
-  if ((output = fopen(filename, "a")) == NULL) {
-    printf("Error opening %s: error #: %d\n", filename, errno);
-    return 1;
-  }
-  fprintf(output, "Estimating coheritabilies\n");
-  fprintf(output, "Iter\tCoher_All\t");
-  fprintf(output, "Difference\tTarget\n");
-  fclose(output);
-
   // null model blank
   sumold = 0;
   for (j = 0; j < length; j++) {
@@ -1781,18 +1561,6 @@ int solve_cors(double *stats, int num_parts, int gcon, int cept, int num_blocks,
     diff = sumhers3 - sumold;
     sumold = sumhers3;
 
-    // print update - have just got sumhers3
-    // printf("%d\t%.4f\t", count + 1, sumhers3);
-    // printf("%.6f\t%.6f\n", diff, tol);
-
-    if ((output = fopen(filename, "a")) == NULL) {
-      printf("Error opening %s: error #: %d\n", filename, errno);
-      return 1;
-    }
-    fprintf(output, "%d\t%.6f\t", count + 1, sumhers3);
-    fprintf(output, "%.6f\t%.6f\n", diff, tol);
-    fclose(output);
-
     // update exps3 - can use sX, but remember to multiply by sW[j] (but no need
     // to add on one)
     alpha = 1.0;
@@ -1808,15 +1576,6 @@ int solve_cors(double *stats, int num_parts, int gcon, int cept, int num_blocks,
       break;
     }
     if (count == maxiter) {
-      if ((output = fopen(filename, "a")) == NULL) {
-        printf("Error opening %s: error #: %d\n", filename, errno);
-        return 1;
-      }
-      fprintf(
-          output,
-          "Warning, the optimizer failed to converge within %d iterations\n",
-          maxiter);
-      fclose(output);
       break;
     }
 

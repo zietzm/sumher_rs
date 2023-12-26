@@ -1,8 +1,5 @@
 use crate::io::gwas::AlignedGwasSumstats;
 
-use std::ffi::CString;
-use std::os::raw::c_char;
-
 use anyhow::{anyhow, Result};
 
 #[link(name = "ldak")]
@@ -29,7 +26,6 @@ extern "C" {
         maxiter: i32,
         chisol: i32,
         sflag: i32,
-        filename: *const c_char,
     ) -> i32;
 
     fn solve_cors(
@@ -50,7 +46,6 @@ extern "C" {
         srhos2: *const f64,
         tol: f64,
         maxiter: i32,
-        filename: *const c_char,
     ) -> i32;
 }
 
@@ -106,7 +101,6 @@ pub fn solve_sums_wrapper(
     sample_sizes: &[f64],
     category_vals: &[Vec<f64>],
     category_contribs: &[Vec<f64>],
-    progress_filename: &str,
     options: Option<SolveSumsOptions>,
 ) -> Result<SolveSumsResult> {
     let gcon = options.as_ref().and_then(|x| x.gcon).unwrap_or(0);
@@ -132,9 +126,6 @@ pub fn solve_sums_wrapper(
     let svars = vec_vec_to_double_ptr_ptr(category_vals);
     let ssums = vec_vec_to_double_ptr_ptr(category_contribs);
 
-    let progress_filename = CString::new(progress_filename).unwrap();
-    let progress_filename = progress_filename.as_ptr();
-
     unsafe {
         let code = solve_sums(
             stats.as_mut_ptr(),
@@ -158,7 +149,6 @@ pub fn solve_sums_wrapper(
             options.as_ref().and_then(|x| x.maxiter).unwrap_or(100),
             options.as_ref().and_then(|x| x.chisol).unwrap_or(1),
             options.as_ref().and_then(|x| x.sflag).unwrap_or(0),
-            progress_filename,
         );
         if code != 0 {
             return Err(anyhow!("solve_sums failed"));
@@ -179,7 +169,6 @@ pub fn solve_cors_wrapper(
     gwas_sumstats_2: &AlignedGwasSumstats,
     category_vals: &[Vec<f64>],
     category_contribs: &[Vec<f64>],
-    progress_filename: &str,
     options: Option<SolveCorsOptions>,
 ) -> Result<SolveCorsResult> {
     let gcon = options.as_ref().and_then(|x| x.gcon).unwrap_or(1);
@@ -191,9 +180,6 @@ pub fn solve_cors_wrapper(
 
     let svars = vec_vec_to_double_ptr_ptr(category_vals);
     let ssums = vec_vec_to_double_ptr_ptr(category_contribs);
-
-    let progress_filename = CString::new(progress_filename).unwrap();
-    let progress_filename = progress_filename.as_ptr();
 
     unsafe {
         let code = solve_cors(
@@ -214,7 +200,6 @@ pub fn solve_cors_wrapper(
             gwas_sumstats_2.rhos.as_ptr(),
             options.as_ref().and_then(|x| x.tol).unwrap_or(0.0001),
             options.as_ref().and_then(|x| x.maxiter).unwrap_or(100),
-            progress_filename,
         );
         if code != 0 {
             return Err(anyhow!("solve_cors failed"));
