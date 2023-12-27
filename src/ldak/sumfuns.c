@@ -20,7 +20,6 @@ LDAK.  If not, see <http://www.gnu.org/licenses/>.
 // summary functions
 
 //////////////////////////
-#include <errno.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -38,6 +37,8 @@ int solve_sums(double *stats, double *likes, double *cohers, double *influs,
 // sflag=3 - just get expectations and likelihood, sflag=4 - LDSC, sflag=5 -
 // divide+updating
 {
+  int return_code = 0;
+
   int j, j2, p, q, q2, q3, count, count2, start, end, mark, one = 1;
   double value, value2, sum, sum2, sumsq, mean, mean2, var, alpha, beta;
 
@@ -340,7 +341,8 @@ int solve_sums(double *stats, double *likes, double *cohers, double *influs,
       int code = eigen_invert(sXTX, total, sXTX2, 1, thetas, 1);
       if (code != 0) {
         printf("Error in eigen_invert\n");
-        return 1;
+        return_code = 1;
+        goto cleanup;
       }
     } else // use either single nr or multi nr (only move if good for
            // likelihood)
@@ -436,7 +438,8 @@ int solve_sums(double *stats, double *likes, double *cohers, double *influs,
         int code = eigen_invert(AI, total, AI2, -1, AI3, 1);
         if (code != 0) {
           printf("Error in eigen_invert\n");
-          return 1;
+          return_code = 1;
+          goto cleanup;
         }
 
         // get proposed move
@@ -706,7 +709,8 @@ int solve_sums(double *stats, double *likes, double *cohers, double *influs,
       int code = eigen_invert(AI, total, AI2, -1, AI3, 1);
       if (code != 0) {
         printf("Error in eigen_invert\n");
-        return 1;
+        return_code = 1;
+        goto cleanup;
       }
 
       // AI provides variances for thetas = (cb*scale, (c-1), ca*scale) - for
@@ -908,7 +912,8 @@ int solve_sums(double *stats, double *likes, double *cohers, double *influs,
         int code = eigen_invert(sXTX, total, sXTX2, 1, thetas, 1);
         if (code != 0) {
           printf("Error in eigen_invert\n");
-          return 1;
+          return_code = 1;
+          goto cleanup;
         }
 
         // save
@@ -1024,6 +1029,7 @@ int solve_sums(double *stats, double *likes, double *cohers, double *influs,
     }
   }
 
+cleanup:
   free(thetas);
   free(thetadiffs);
   free(exps);
@@ -1049,13 +1055,16 @@ int solve_sums(double *stats, double *likes, double *cohers, double *influs,
   free(J);
   free(JAI);
   free(JAIJT);
-  return 0;
+  return return_code;
 }
 
 int solve_cors(double *stats, int num_parts, int gcon, int cept, int num_blocks,
                int length, double *stags, double **svars, double **ssums,
                double *snss, double *schis, double *srhos, double *snss2,
                double *schis2, double *srhos2, double tol, int maxiter) {
+
+  int return_code = 0;
+
   int j, q, q2, p, count, start, end, mark, one = 1;
   double sum, sum2, sum3, sumsq, mean, var, alpha, beta;
 
@@ -1162,7 +1171,8 @@ int solve_cors(double *stats, int num_parts, int gcon, int cept, int num_blocks,
     int code = eigen_invert(sXTX, total2, sXTX2, 1, thetas, 1);
     if (code != 0) {
       printf("Error in eigen_invert\n");
-      return 1;
+      return_code = 1;
+      goto cleanup;
     }
 
     // get diff
@@ -1253,7 +1263,8 @@ int solve_cors(double *stats, int num_parts, int gcon, int cept, int num_blocks,
     int code = eigen_invert(sXTX, total2, sXTX2, 1, thetas, 1);
     if (code != 0) {
       printf("Error in eigen_invert\n");
-      return 1;
+      return_code = 1;
+      goto cleanup;
     }
 
     // put heritabilities, their sum, gc and cept into jacks
@@ -1322,7 +1333,8 @@ int solve_cors(double *stats, int num_parts, int gcon, int cept, int num_blocks,
     int code = eigen_invert(sXTX, total2, sXTX2, 1, thetas, 1);
     if (code != 0) {
       printf("Error in eigen_invert\n");
-      return 1;
+      return_code = 1;
+      goto cleanup;
     }
 
     // get diff
@@ -1413,7 +1425,8 @@ int solve_cors(double *stats, int num_parts, int gcon, int cept, int num_blocks,
     int code = eigen_invert(sXTX, total2, sXTX2, 1, thetas, 1);
     if (code != 0) {
       printf("Error in eigen_invert\n");
-      return 1;
+      return_code = 1;
+      goto cleanup;
     }
 
     // put heritabilities, their sum, gc and cept into jacks
@@ -1476,7 +1489,8 @@ int solve_cors(double *stats, int num_parts, int gcon, int cept, int num_blocks,
     int code = eigen_invert(sXTX, total3, sXTX2, 1, thetas, 1);
     if (code != 0) {
       printf("Error in eigen_invert\n");
-      return 1;
+      return_code = 1;
+      goto cleanup;
     }
 
     // get diff
@@ -1579,7 +1593,8 @@ int solve_cors(double *stats, int num_parts, int gcon, int cept, int num_blocks,
     int code = eigen_invert(sXTX, total3, sXTX2, 1, thetas, 1);
     if (code != 0) {
       printf("Error in eigen_invert\n");
-      return 1;
+      return_code = 1;
+      goto cleanup;
     }
 
     // put coheritabilities, their sum and the weird term into jacks
@@ -1640,6 +1655,7 @@ int solve_cors(double *stats, int num_parts, int gcon, int cept, int num_blocks,
   // printf("Correlation: %.4f (%.4f)\n\n", stats[total + 3],
   //        stats[total + 3 + total + 4 + num_parts]);
 
+cleanup:
   free(snss3);
   free(schis3);
   free(exps);
@@ -1655,5 +1671,5 @@ int solve_cors(double *stats, int num_parts, int gcon, int cept, int num_blocks,
   free(sXTYs);
   free(thetas);
   free(jacks);
-  return 0;
+  return return_code;
 }
