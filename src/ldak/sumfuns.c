@@ -38,60 +38,6 @@ int solve_sums(double *stats, double *likes, double *cohers, double *influs,
 // sflag=3 - just get expectations and likelihood, sflag=4 - LDSC, sflag=5 -
 // divide+updating
 {
-
-  // printf("Num parts: %d\n", num_parts);
-  // printf("Gcon: %d\n", gcon);
-  // printf("Cept: %d\n", cept);
-  // printf("Num blocks: %d\n", num_blocks);
-  // printf("Length: %d\n", length);
-  // printf("Ncv: %d\n", ncv);
-  // printf("Tol: %f\n", tol);
-  // printf("Maxiter: %d\n", maxiter);
-  // printf("Chisol: %d\n", chisol);
-  // printf("Sflag: %d\n", sflag);
-  // printf("Filename: %s\n", filename);
-  //
-  // printf("stags: ");
-  // for (int i = 0; i < 5; i++) {
-  //   printf("%f ", stags[i]);
-  // }
-  // printf("\n");
-  //
-  // int n_print = 1;
-  // if (num_parts > 5) {
-  //   n_print = 5;
-  // } else {
-  //   n_print = num_parts;
-  // }
-  //
-  // printf("svars: ");
-  // for (int i = 0; i < n_print; i++) {
-  //   for (int k = 0; k < 5; k++) {
-  //     printf("%f ", svars[i][k]);
-  //   }
-  // }
-  // printf("\n");
-  //
-  // printf("ssums: ");
-  // for (int i = 0; i < n_print; i++) {
-  //   for (int k = 0; k < (num_parts + 2); k++) {
-  //     printf("%f ", ssums[i][k]);
-  //   }
-  // }
-  // printf("\n");
-  //
-  // printf("snss: ");
-  // for (int i = 0; i < 5; i++) {
-  //   printf("%f ", snss[i]);
-  // }
-  // printf("\n");
-  //
-  // printf("schis: ");
-  // for (int i = 0; i < 5; i++) {
-  //   printf("%f ", schis[i]);
-  // }
-  // printf("\n");
-  //
   int j, j2, p, q, q2, q3, count, count2, start, end, mark, one = 1;
   double value, value2, sum, sum2, sumsq, mean, mean2, var, alpha, beta;
 
@@ -559,7 +505,6 @@ int solve_sums(double *stats, double *likes, double *cohers, double *influs,
 
     count++;
   } // end of while loop
-  // printf("\n");
 
   // load up first column of stats which contain Q hers, gc, na, sum of Q hers,
   // Q cats
@@ -939,9 +884,6 @@ int solve_sums(double *stats, double *likes, double *cohers, double *influs,
       }
 
       for (p = 0; p < num_blocks; p++) {
-        // if (p % 100000 == 0) {
-        //   printf("Performing Jackknife %d out of %d\n", p + 1, num_blocks);
-        // }
         start = (double)(p) / num_blocks * length;
         end = (double)(p + 1) / num_blocks * length;
 
@@ -998,7 +940,6 @@ int solve_sums(double *stats, double *likes, double *cohers, double *influs,
           }
         }
       } // end of p loop
-      // printf("\n");
 
       // get sds for all stats (as is)
       for (q = 0; q < total + 1 + num_parts; q++) {
@@ -1289,9 +1230,6 @@ int solve_cors(double *stats, int num_parts, int gcon, int cept, int num_blocks,
   for (p = 0; p < num_blocks; p++) {
     start = (double)p / num_blocks * length;
     end = (double)(p + 1) / num_blocks * length;
-    // if (p % 500000 == 0) {
-    //   printf("Performing Jackknife %d out of %d\n", p + 1, num_blocks);
-    // }
     count = end - start;
 
     // reset sXTX and sXTY
@@ -1452,9 +1390,6 @@ int solve_cors(double *stats, int num_parts, int gcon, int cept, int num_blocks,
   for (p = 0; p < num_blocks; p++) {
     start = (double)p / num_blocks * length;
     end = (double)(p + 1) / num_blocks * length;
-    // if (p % 500000 == 0) {
-    //   printf("Performing Jackknife %d out of %d\n", p + 1, num_blocks);
-    // }
     count = end - start;
 
     // reset sXTX and sXTY
@@ -1502,7 +1437,6 @@ int solve_cors(double *stats, int num_parts, int gcon, int cept, int num_blocks,
     }
     jacks[total + 1 + mark] = sumhers2;
   }
-  // printf("\n");
 
   ////////
 
@@ -1622,9 +1556,6 @@ int solve_cors(double *stats, int num_parts, int gcon, int cept, int num_blocks,
   for (p = 0; p < num_blocks; p++) {
     start = (double)p / num_blocks * length;
     end = (double)(p + 1) / num_blocks * length;
-    // if (p % 500000 == 0) {
-    // printf("Performing Jackknife %d out of %d\n", p + 1, num_blocks);
-    // }
     count = end - start;
 
     // reset sXTX and sXTY
@@ -1683,7 +1614,6 @@ int solve_cors(double *stats, int num_parts, int gcon, int cept, int num_blocks,
           pow(jacks[q + mark] * jacks[total2 + q + mark], -.5);
     }
   }
-  // printf("\n");
 
   ////////
 
