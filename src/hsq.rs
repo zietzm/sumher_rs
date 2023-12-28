@@ -10,7 +10,7 @@ use crate::util::{align_if_possible, check_predictors_aligned, RuntimeSetup};
 use anyhow::Result;
 use crossbeam_channel::Receiver;
 use indicatif::ProgressBar;
-use serde::{Serialize, Serializer};
+use serde::{Deserialize, Serialize, Serializer};
 
 fn round_serialize<S>(x: &f64, s: S) -> Result<S::Ok, S::Error>
 where
@@ -19,8 +19,8 @@ where
     s.serialize_str(&format!("{:.6}", x))
 }
 
-#[derive(Debug, Serialize)]
-struct HeritabilityPartition {
+#[derive(Debug, Serialize, Deserialize)]
+pub struct HeritabilityPartition {
     pub component: String,
 
     #[serde(serialize_with = "round_serialize")]
@@ -36,8 +36,8 @@ struct HeritabilityPartition {
     pub influence_se: f64,
 }
 
-#[derive(Debug, Serialize)]
-struct GeneticCorrelationPartition {
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GeneticCorrelationPartition {
     pub component: String,
 
     #[serde(serialize_with = "round_serialize")]

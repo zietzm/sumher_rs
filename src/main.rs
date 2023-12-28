@@ -2,12 +2,13 @@ use clap::{Args, Parser, Subcommand};
 use glob::glob;
 use std::path::PathBuf;
 
+mod collect;
 mod ffi;
 mod hsq;
 mod io;
 mod util;
 
-// use crate::hsq::compute_rg_parallel;
+use crate::collect::collect_results;
 use crate::hsq::{compute_h2, compute_rg};
 use crate::util::{format_plink_sumstats, RuntimeSetup};
 
@@ -91,6 +92,15 @@ enum Command {
         #[arg(short, long, default_value_t = 100)]
         chunk_size: usize,
     },
+    Collect {
+        /// Path to the directory containing the GWAS summary statistics files
+        #[arg(short, long)]
+        root: PathBuf,
+
+        /// Path to the output file
+        #[arg(short, long)]
+        output_path: PathBuf,
+    },
 }
 
 fn validate_shared_args(args: &mut SharedArgs) -> RuntimeSetup {
@@ -110,6 +120,8 @@ fn validate_shared_args(args: &mut SharedArgs) -> RuntimeSetup {
                 }
 
                 new_gwas_results.extend(globbed.into_iter().map(|x| x.unwrap()));
+            } else {
+                panic!("GWAS results file {} does not exist", f.to_str().unwrap());
             }
         } else {
             new_gwas_results.push(f.clone());
@@ -205,6 +217,13 @@ fn main() {
             output_path,
         } => {
             let result = format_plink_sumstats(&gwas_results, &output_path);
+            match result {
+                Ok(_) => println!("Success!"),
+                Err(e) => println!("Error: {}", e),
+            }
+        }
+        Command::Collect { root, output_path } => {
+            let result = collect_results(&root, &output_path);
             match result {
                 Ok(_) => println!("Success!"),
                 Err(e) => println!("Error: {}", e),

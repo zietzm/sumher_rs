@@ -1606,6 +1606,7 @@ dependencies = [
  "ndarray",
  "num_cpus",
  "polars",
+ "regex",
  "serde",
 ]
 
