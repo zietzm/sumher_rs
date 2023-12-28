@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
 use crate::hsq::GeneticCorrelationPartition;
+use crate::util::make_progressbar;
 
 fn get_result_paths(root_glob: &Path) -> Result<Vec<PathBuf>> {
     let mut sumstats_paths = Vec::new();
@@ -67,6 +68,9 @@ pub fn collect_results(root: &Path, output_path: &Path) -> Result<()> {
     println!("Found {} results files", results_paths.len());
     results_paths.sort();
 
+    let pb = make_progressbar(results_paths.len() as u64);
+    pb.lock().unwrap().set_message("Collecting results");
+
     let mut final_results = Vec::new();
     for path in results_paths {
         let (phenotype_1, phenotype_2) = phenotypes_from_path(&path)?;
@@ -80,6 +84,7 @@ pub fn collect_results(root: &Path, output_path: &Path) -> Result<()> {
                 se: result.se,
             });
         }
+        pb.lock().unwrap().inc(1);
     }
 
     let mut writer = WriterBuilder::new()

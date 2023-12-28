@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 use crate::ffi::{solve_cors_wrapper, solve_sums_wrapper, SolveCorsResult, SolveSumsResult};
 use crate::io::gwas::{sumstat_processor, sumstat_reader, AlignedGwasSumstats, RawGwasSumstats};
 use crate::io::tagging::{read_tagfile, TagInfo};
-use crate::util::{align_if_possible, check_predictors_aligned, RuntimeSetup};
+use crate::util::{align_if_possible, check_predictors_aligned, make_progressbar, RuntimeSetup};
 
 use anyhow::Result;
 use crossbeam_channel::Receiver;
@@ -152,17 +152,6 @@ where
 
     writer.flush()?;
     Ok(())
-}
-
-fn make_progressbar(n_total: u64) -> Arc<Mutex<ProgressBar>> {
-    let pb = ProgressBar::new(n_total);
-    pb.set_style(
-        indicatif::ProgressStyle::default_bar()
-            .template("[{elapsed_precise}] {bar:40} {pos:>7}/{len:7} ({eta}) {msg}")
-            .unwrap()
-            .progress_chars("##-"),
-    );
-    Arc::new(Mutex::new(pb))
 }
 
 fn filter_gwas_paths(

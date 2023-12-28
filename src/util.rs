@@ -4,7 +4,9 @@ use crate::io::tagging::TagInfo;
 
 use anyhow::Result;
 use csv::ReaderBuilder;
+use indicatif::ProgressBar;
 use polars::prelude::*;
+use std::sync::{Arc, Mutex};
 
 pub struct RuntimeSetup {
     pub n_threads: usize,
@@ -14,6 +16,17 @@ impl RuntimeSetup {
     pub fn new(n_threads: usize) -> Self {
         RuntimeSetup { n_threads }
     }
+}
+
+pub fn make_progressbar(n_total: u64) -> Arc<Mutex<ProgressBar>> {
+    let pb = ProgressBar::new(n_total);
+    pb.set_style(
+        indicatif::ProgressStyle::default_bar()
+            .template("[{elapsed_precise}] {bar:40} {pos:>7}/{len:7} ({eta}) {msg}")
+            .unwrap()
+            .progress_chars("##-"),
+    );
+    Arc::new(Mutex::new(pb))
 }
 
 /// Reformat Plink summary statistics files for use with LDAK
