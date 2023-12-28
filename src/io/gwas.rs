@@ -1,59 +1,118 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use anyhow::Result;
+use crossbeam_channel::{Receiver, Sender};
 use csv::ReaderBuilder;
-use itertools::izip;
-use polars::prelude::*;
 
-use crate::hsq::AlignedGwasSumstats;
+use serde::Deserialize;
 
-/// Read GWAS summary statistics from an LDAK-formatted file.
-pub fn read_gwas_result<P>(filename: &P) -> Result<DataFrame>
-where
-    P: AsRef<Path> + AsRef<std::ffi::OsStr> + ?Sized,
-{
-    let df = CsvReader::from_path(filename)?
-        .has_header(true)
-        .with_separator(b'\t')
-        .with_columns(Some(vec![
-            "Predictor".to_string(),
-            "n".to_string(),
-            "Z".to_string(),
-        ]))
-        .with_ignore_errors(true)
-        .finish()?;
-
-    Ok(df)
+#[derive(Clone, Debug, Deserialize)]
+pub struct GwasResultLine {
+    #[serde(rename = "Predictor")]
+    pub predictor: String,
+    pub n: f64,
+    #[serde(rename = "Z")]
+    pub z: f64,
 }
 
-/// Read GWAS summary statistics from an LDAK-formatted file when the predictors
-/// are known to be aligned across files. This is faster than reading the file
-/// into a DataFrame and joining the predictors.
-pub fn read_gwas_aligned<P>(filename: &P) -> Result<AlignedGwasSumstats>
-where
-    P: AsRef<Path> + AsRef<std::ffi::OsStr> + ?Sized,
-{
-    let mut n = Vec::new();
-    let mut z = Vec::new();
+pub struct RawGwasSumstats {
+    pub phenotype: String,
+    pub results: Vec<GwasResultLine>,
+}
 
-    let mut csv_reader = ReaderBuilder::new()
+pub struct AlignedGwasSumstats {
+    pub phenotype: String,
+    pub chisq: Vec<f64>,
+    pub sample_sizes: Vec<f64>,
+    pub rhos: Vec<f64>,
+}
+
+/// Read GWAS summary statistics from an LDAK-formatted file.
+pub fn read_sumstats(path: &Path) -> Result<RawGwasSumstats> {
+    let mut reader = ReaderBuilder::new()
         .has_headers(true)
         .delimiter(b'\t')
-        .from_path(filename)?;
+        .from_path(path)?;
 
-    let n_col = csv_reader.headers()?.iter().position(|x| x == "n").unwrap();
-    let z_col = csv_reader.headers()?.iter().position(|x| x == "Z").unwrap();
-
-    for result in csv_reader.records() {
-        let record = result?;
-        n.push(record.get(n_col).unwrap().parse::<f64>()?);
-        z.push(record.get(z_col).unwrap().parse::<f64>()?);
+    let mut results = Vec::new();
+    for result in reader.deserialize() {
+        let record: GwasResultLine = result?;
+        results.push(record);
     }
 
-    let chisq = z.iter().map(|x| x.powi(2)).collect::<Vec<f64>>();
-    let rho = izip!(chisq.iter(), n.iter(), z.iter())
-        .map(|(chi, ni, zi)| zi.signum() * (chi / (chi + ni)).sqrt())
-        .collect::<Vec<f64>>();
+    let phenotype = path.file_stem().unwrap().to_str().unwrap().to_string();
 
-    Ok(AlignedGwasSumstats::new(chisq, n, rho))
+    Ok(RawGwasSumstats { phenotype, results })
+}
+
+fn align_sumstats(
+    predictor_order: &[String],
+    raw_stats: &[GwasResultLine],
+) -> Result<Vec<GwasResultLine>> {
+    let aligned_stats = raw_stats
+        .iter()
+        .filter(|s| predictor_order.iter().any(|p| p == &s.predictor))
+        .cloned()
+        .collect::<Vec<GwasResultLine>>();
+
+    Ok(aligned_stats)
+}
+
+pub fn process_sumstats(
+    predictor_order: &[String],
+    raw_stats: &RawGwasSumstats,
+) -> Result<AlignedGwasSumstats> {
+    let is_aligned = predictor_order
+        .iter()
+        .zip(raw_stats.results.iter())
+        .all(|(p, s)| p == &s.predictor);
+
+    let aligned_vec: Vec<GwasResultLine>;
+    let aligned_stats: &[GwasResultLine];
+
+    if is_aligned {
+        aligned_stats = &raw_stats.results;
+    } else {
+        println!("WARNING: Aligning {}", raw_stats.phenotype);
+        aligned_vec = align_sumstats(predictor_order, &raw_stats.results)?;
+        aligned_stats = &aligned_vec;
+    }
+
+    let mut chisq = Vec::new();
+    let mut sample_sizes = Vec::new();
+    let mut rhos = Vec::new();
+
+    for row in aligned_stats.iter() {
+        let chisq_i = row.z.powi(2);
+        chisq.push(chisq_i);
+        sample_sizes.push(row.n);
+        rhos.push(row.z.signum() * (chisq_i / (chisq_i + row.n)).sqrt());
+    }
+
+    Ok(AlignedGwasSumstats {
+        phenotype: raw_stats.phenotype.clone(),
+        chisq,
+        sample_sizes,
+        rhos,
+    })
+}
+
+pub fn sumstat_reader(gwas_paths: &[PathBuf], raw_channel: &Sender<RawGwasSumstats>) -> Result<()> {
+    for path in gwas_paths {
+        let results = read_sumstats(path)?;
+        raw_channel.send(results)?;
+    }
+    Ok(())
+}
+
+pub fn sumstat_processor(
+    predictor_order: &[String],
+    raw_channel: &Receiver<RawGwasSumstats>,
+    processed_channel: &Sender<AlignedGwasSumstats>,
+) -> Result<()> {
+    for raw_stats in raw_channel {
+        let aligned_stats = process_sumstats(predictor_order, &raw_stats)?;
+        processed_channel.send(aligned_stats)?;
+    }
+    Ok(())
 }
