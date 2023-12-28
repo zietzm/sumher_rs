@@ -426,14 +426,12 @@ fn rg_processor(
     progress: &Arc<Mutex<ProgressBar>>,
 ) -> Result<()> {
     for (left, right) in receiver {
-        let output_name = get_rg_path_to_write(output_root, &left, &right);
-        if output_name.is_none() {
+        let output_path = get_rg_path_to_write(output_root, &left, &right);
+        if output_path.is_none() {
             progress.lock().unwrap().inc(1);
             continue;
         }
-        let output_name = output_name.unwrap();
-
-        let output_path = output_name + ".rg";
+        let output_path = output_path.unwrap();
 
         let result = solve_cors_wrapper(
             &tag_info.tag_vec,
