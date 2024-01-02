@@ -153,9 +153,8 @@ fn h2_result_writer(
     for partition in receiver {
         cache.push(partition);
 
-        if cache.len() >= 500 {
+        if cache.len() >= 10 {
             conn.lock().unwrap().write_h2(&cache)?;
-            cache.clear();
         }
 
         for partition in cache.iter() {
@@ -165,6 +164,7 @@ fn h2_result_writer(
         }
         cache.clear();
     }
+    conn.lock().unwrap().write_h2(&cache)?;
 
     Ok(())
 }
@@ -179,9 +179,8 @@ fn rg_result_writer(
     for partition in receiver {
         cache.push(partition);
 
-        if cache.len() >= 500 {
+        if cache.len() >= 10 {
             conn.lock().unwrap().write_rg(&cache)?;
-            cache.clear();
         }
 
         for partition in cache.iter() {
@@ -191,6 +190,7 @@ fn rg_result_writer(
         }
         cache.clear();
     }
+    conn.lock().unwrap().write_rg(&cache)?;
 
     Ok(())
 }
