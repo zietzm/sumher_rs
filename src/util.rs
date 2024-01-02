@@ -1,5 +1,8 @@
+use indicatif::ProgressBar;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 
+use crate::db::{DbConnection, Progress};
 use crate::io::tagging::TagInfo;
 
 use anyhow::Result;
@@ -8,12 +11,39 @@ use polars::prelude::*;
 
 pub struct RuntimeSetup {
     pub n_threads: usize,
+    pub chunk_size: usize,
+    pub db_conn: Arc<Mutex<DbConnection>>,
+    pub skip_alignment_check: bool,
+    pub computed: Arc<Progress>,
 }
 
 impl RuntimeSetup {
-    pub fn new(n_threads: usize) -> Self {
-        RuntimeSetup { n_threads }
+    pub fn new(
+        n_threads: usize,
+        chunk_size: usize,
+        db_conn: DbConnection,
+        skip_alignment_check: bool,
+        computed: Progress,
+    ) -> Self {
+        RuntimeSetup {
+            n_threads,
+            chunk_size,
+            db_conn: Arc::new(Mutex::new(db_conn)),
+            skip_alignment_check,
+            computed: Arc::new(computed),
+        }
     }
+}
+
+pub fn make_progressbar(n_total: u64) -> Arc<Mutex<ProgressBar>> {
+    let pb = ProgressBar::new(n_total);
+    pb.set_style(
+        indicatif::ProgressStyle::default_bar()
+            .template("[{elapsed_precise}] {bar:40} {pos:>7}/{len:7} ({eta}) {msg}")
+            .unwrap()
+            .progress_chars("##-"),
+    );
+    Arc::new(Mutex::new(pb))
 }
 
 /// Reformat Plink summary statistics files for use with LDAK
@@ -103,19 +133,14 @@ pub fn check_predictors_aligned(
 ) -> Result<Option<DataFrame>> {
     let first_series = read_predictors(&gwas_paths[0])?;
 
-    let pb = indicatif::ProgressBar::new((gwas_paths.len() - 1) as u64);
-    pb.set_style(
-        indicatif::ProgressStyle::default_bar()
-            .template("[{elapsed_precise}] {bar:40} {pos:>7}/{len:7} ({eta}) {msg}")?
-            .progress_chars("##-"),
-    );
+    let pb = make_progressbar(gwas_paths.len() as u64);
 
     let mut aligned = true;
     if !skip_check {
         for path in gwas_paths.iter().skip(1) {
             let result = compare_predictors(path, &first_series)?;
             aligned = aligned && result;
-            pb.inc(1);
+            pb.lock().unwrap().inc(1);
         }
     }
 

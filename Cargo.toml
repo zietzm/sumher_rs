@@ -17,7 +17,9 @@ itertools = "0.12.0"
 ndarray = "0.15.6"
 num_cpus = "1.16.0"
 polars = { version = "0.35.4", features = ["lazy", "ndarray", "performant", "sign"] }
+rusqlite = "0.30.0"
 serde = "1.0.193"
+serde_rusqlite = "0.34.0"
 
 [build-dependencies]
 cc = "1.0.83"
