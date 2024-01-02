@@ -40,7 +40,7 @@ pub fn read_sumstats(path: &Path) -> Result<RawGwasSumstats> {
         results.push(record);
     }
 
-    let phenotype = path.file_stem().unwrap().to_str().unwrap().to_string();
+    let phenotype = path.to_str().unwrap().to_string();
 
     Ok(RawGwasSumstats { phenotype, results })
 }

@@ -213,8 +213,6 @@ pub fn compute_h2(
     for chunk in chunks.iter() {
         let (sender, receiver) = crossbeam_channel::unbounded::<AlignedGwasSumstats>();
 
-        load_phenotypes_channel(chunk, &tag_info, runtime_setup, sender)?;
-
         let mut ldak_workers = Vec::new();
         for _ in 0..runtime_setup.n_threads {
             let tag_info = tag_info.clone();
@@ -224,6 +222,8 @@ pub fn compute_h2(
                 h2_processor(&receiver, &tag_info, &h2_sender)
             }));
         }
+
+        load_phenotypes_channel(chunk, &tag_info, runtime_setup, sender)?;
 
         for worker in ldak_workers {
             worker.join().unwrap()?;
