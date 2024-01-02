@@ -72,22 +72,40 @@ impl DbConnection {
         })
     }
 
-    pub fn write_h2(&self, row: &HsqResult) -> Result<()> {
-        self.conn.execute(
-            "INSERT INTO h2 (phenotype, component, h2, h2_se) VALUES 
-            (:phenotype, :component, :estimate, :se)",
-            to_params_named(row)?.to_slice().as_slice(),
-        )?;
+    pub fn write_h2(&mut self, rows: &[HsqResult]) -> Result<()> {
+        let tx = self.conn.transaction()?;
+
+        {
+            let mut stmt = tx.prepare(
+                "INSERT INTO h2 (phenotype, component, h2, h2_se) VALUES 
+                (:phenotype, :component, :estimate, :se)",
+            )?;
+
+            for row in rows.iter() {
+                stmt.execute(to_params_named(row)?.to_slice().as_slice())?;
+            }
+        }
+
+        tx.commit()?;
 
         Ok(())
     }
 
-    pub fn write_rg(&self, row: &RgResult) -> Result<()> {
-        self.conn.execute(
-            "INSERT INTO rg (phenotype1, phenotype2, component, rg, rg_se) VALUES 
-            (:phenotype1, :phenotype2, :component, :estimate, :se)",
-            to_params_named(row)?.to_slice().as_slice(),
-        )?;
+    pub fn write_rg(&mut self, rows: &[RgResult]) -> Result<()> {
+        let tx = self.conn.transaction()?;
+
+        {
+            let mut stmt = tx.prepare(
+                "INSERT INTO rg (phenotype1, phenotype2, component, rg, rg_se) VALUES 
+                (:phenotype1, :phenotype2, :component, :estimate, :se)",
+            )?;
+
+            for row in rows.iter() {
+                stmt.execute(to_params_named(row)?.to_slice().as_slice())?;
+            }
+        }
+
+        tx.commit()?;
 
         Ok(())
     }

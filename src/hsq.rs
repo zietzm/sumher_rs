@@ -148,11 +148,22 @@ fn h2_result_writer(
     progress: &Arc<Mutex<ProgressBar>>,
     conn: &Mutex<DbConnection>,
 ) -> Result<()> {
+    let mut cache = Vec::new();
+
     for partition in receiver {
-        conn.lock().unwrap().write_h2(&partition)?;
-        if partition.component == "Her_All" {
-            progress.lock().unwrap().inc(1);
+        cache.push(partition);
+
+        if cache.len() >= 500 {
+            conn.lock().unwrap().write_h2(&cache)?;
+            cache.clear();
         }
+
+        for partition in cache.iter() {
+            if partition.component == "Her_All" {
+                progress.lock().unwrap().inc(1);
+            }
+        }
+        cache.clear();
     }
 
     Ok(())
@@ -163,11 +174,22 @@ fn rg_result_writer(
     progress: &Arc<Mutex<ProgressBar>>,
     conn: &Mutex<DbConnection>,
 ) -> Result<()> {
+    let mut cache = Vec::new();
+
     for partition in receiver {
-        conn.lock().unwrap().write_rg(&partition)?;
-        if partition.component == "Cor_All" {
-            progress.lock().unwrap().inc(1);
+        cache.push(partition);
+
+        if cache.len() >= 500 {
+            conn.lock().unwrap().write_rg(&cache)?;
+            cache.clear();
         }
+
+        for partition in cache.iter() {
+            if partition.component == "Cor_All" {
+                progress.lock().unwrap().inc(1);
+            }
+        }
+        cache.clear();
     }
 
     Ok(())
