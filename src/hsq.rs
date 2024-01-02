@@ -155,14 +155,15 @@ fn h2_result_writer(
 
         if cache.len() >= 10 {
             conn.lock().unwrap().write_h2(&cache)?;
-        }
 
-        for partition in cache.iter() {
-            if partition.component == "Her_All" {
-                progress.lock().unwrap().inc(1);
+            for partition in cache.iter() {
+                if partition.component == "Her_All" {
+                    progress.lock().unwrap().inc(1);
+                }
             }
+
+            cache.clear();
         }
-        cache.clear();
     }
     conn.lock().unwrap().write_h2(&cache)?;
     for partition in cache.iter() {
@@ -186,14 +187,14 @@ fn rg_result_writer(
 
         if cache.len() >= 10 {
             conn.lock().unwrap().write_rg(&cache)?;
-        }
 
-        for partition in cache.iter() {
-            if partition.component == "Cor_All" {
-                progress.lock().unwrap().inc(1);
+            for partition in cache.iter() {
+                if partition.component == "Cor_All" {
+                    progress.lock().unwrap().inc(1);
+                }
             }
+            cache.clear();
         }
-        cache.clear();
     }
     conn.lock().unwrap().write_rg(&cache)?;
     for partition in cache.iter() {

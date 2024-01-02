@@ -1,5 +1,5 @@
 use anyhow::Result;
-use rusqlite::Connection;
+use rusqlite::{Connection, Transaction};
 use serde_rusqlite::to_params_named;
 use std::collections::HashSet;
 use std::path::Path;
@@ -74,18 +74,7 @@ impl DbConnection {
 
     pub fn write_h2(&mut self, rows: &[HsqResult]) -> Result<()> {
         let tx = self.conn.transaction()?;
-
-        {
-            let mut stmt = tx.prepare(
-                "INSERT INTO h2 (phenotype, component, h2, h2_se) VALUES 
-                (:phenotype, :component, :estimate, :se)",
-            )?;
-
-            for row in rows.iter() {
-                stmt.execute(to_params_named(row)?.to_slice().as_slice())?;
-            }
-        }
-
+        insert_hsq_data(&tx, rows)?;
         tx.commit()?;
 
         Ok(())
@@ -93,20 +82,35 @@ impl DbConnection {
 
     pub fn write_rg(&mut self, rows: &[RgResult]) -> Result<()> {
         let tx = self.conn.transaction()?;
-
-        {
-            let mut stmt = tx.prepare(
-                "INSERT INTO rg (phenotype1, phenotype2, component, rg, rg_se) VALUES 
-                (:phenotype1, :phenotype2, :component, :estimate, :se)",
-            )?;
-
-            for row in rows.iter() {
-                stmt.execute(to_params_named(row)?.to_slice().as_slice())?;
-            }
-        }
-
+        insert_rg_data(&tx, rows)?;
         tx.commit()?;
 
         Ok(())
     }
+}
+
+fn insert_hsq_data(tx: &Transaction, rows: &[HsqResult]) -> Result<()> {
+    let mut stmt = tx.prepare_cached(
+        "INSERT INTO h2 (phenotype, component, h2, h2_se) VALUES 
+        (:phenotype, :component, :estimate, :se)",
+    )?;
+
+    for row in rows.iter() {
+        stmt.execute(to_params_named(row)?.to_slice().as_slice())?;
+    }
+
+    Ok(())
+}
+
+fn insert_rg_data(tx: &Transaction, rows: &[RgResult]) -> Result<()> {
+    let mut stmt = tx.prepare_cached(
+        "INSERT INTO rg (phenotype1, phenotype2, component, rg, rg_se) VALUES 
+        (:phenotype1, :phenotype2, :component, :estimate, :se)",
+    )?;
+
+    for row in rows.iter() {
+        stmt.execute(to_params_named(row)?.to_slice().as_slice())?;
+    }
+
+    Ok(())
 }
