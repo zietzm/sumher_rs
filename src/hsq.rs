@@ -165,6 +165,11 @@ fn h2_result_writer(
         cache.clear();
     }
     conn.lock().unwrap().write_h2(&cache)?;
+    for partition in cache.iter() {
+        if partition.component == "Her_All" {
+            progress.lock().unwrap().inc(1);
+        }
+    }
 
     Ok(())
 }
@@ -191,6 +196,11 @@ fn rg_result_writer(
         cache.clear();
     }
     conn.lock().unwrap().write_rg(&cache)?;
+    for partition in cache.iter() {
+        if partition.component == "Cor_All" {
+            progress.lock().unwrap().inc(1);
+        }
+    }
 
     Ok(())
 }
