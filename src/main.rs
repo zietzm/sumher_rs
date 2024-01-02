@@ -113,13 +113,7 @@ fn validate_shared_args(args: &mut SharedArgs) -> RuntimeSetup {
         }
     }
     args.gwas_results = new_gwas_results;
-
-    if !args.output_path.parent().unwrap().exists() {
-        panic!(
-            "Output root {} does not exist",
-            args.output_path.parent().unwrap().to_str().unwrap()
-        );
-    }
+    args.gwas_results.sort();
 
     let conn = DbConnection::new(&args.output_path).unwrap();
     let progress = conn.get_progress().unwrap();

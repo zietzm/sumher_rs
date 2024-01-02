@@ -7,7 +7,7 @@ use crate::io::gwas::{sumstat_processor, sumstat_reader, AlignedGwasSumstats, Ra
 use crate::io::tagging::{read_tagfile, TagInfo};
 use crate::util::{align_if_possible, check_predictors_aligned, make_progressbar, RuntimeSetup};
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use crossbeam_channel::{Receiver, Sender};
 use indicatif::ProgressBar;
 use serde::{Serialize, Serializer};
@@ -150,7 +150,9 @@ fn h2_result_writer(
 ) -> Result<()> {
     for partition in receiver {
         conn.lock().unwrap().write_h2(&partition)?;
-        progress.lock().unwrap().inc(1);
+        if partition.component == "Her_All" {
+            progress.lock().unwrap().inc(1);
+        }
     }
 
     Ok(())
@@ -163,7 +165,9 @@ fn rg_result_writer(
 ) -> Result<()> {
     for partition in receiver {
         conn.lock().unwrap().write_rg(&partition)?;
-        progress.lock().unwrap().inc(1);
+        if partition.component == "Cor_All" {
+            progress.lock().unwrap().inc(1);
+        }
     }
 
     Ok(())
@@ -184,7 +188,6 @@ pub fn compute_h2(
 ) -> Result<()> {
     let n_original = gwas_paths.len() as u64;
     let pb = make_progressbar(n_original);
-
     let gwas_paths = remove_computed_h2(gwas_paths, &runtime_setup.computed);
     pb.lock().unwrap().inc(n_original - gwas_paths.len() as u64);
 
@@ -195,50 +198,38 @@ pub fn compute_h2(
         return Err(anyhow!("GWAS summary files are not aligned!"));
     }
     let tag_info = Arc::new(tag_info);
-    let predictor_order = Arc::new(tag_info.predictor_order.clone());
 
-    let n = runtime_setup.chunk_size / 2;
-    let (raw_sender, raw_receiver) = crossbeam_channel::bounded::<RawGwasSumstats>(n);
-    let (aligned_sender, aligned_receiver) = crossbeam_channel::bounded::<AlignedGwasSumstats>(n);
+    let chunks = gwas_paths
+        .chunks(runtime_setup.chunk_size)
+        .collect::<Vec<_>>();
+
     let (h2_sender, h2_receiver) = crossbeam_channel::unbounded::<HsqResult>();
-
-    let reader_process = std::thread::spawn(move || sumstat_reader(&gwas_paths, &raw_sender));
     let conn = runtime_setup.db_conn.clone();
-    let writer_process = std::thread::spawn(move || h2_result_writer(&h2_receiver, &pb, &conn));
+    let writer_process = {
+        let h2_receiver = h2_receiver.clone();
+        std::thread::spawn(move || h2_result_writer(&h2_receiver, &pb, &conn))
+    };
 
-    let mut sumstat_workers = Vec::new();
-    for _ in 0..runtime_setup.n_threads {
-        let predictor_order = predictor_order.clone();
-        let raw_receiver = raw_receiver.clone();
-        let aligned_sender = aligned_sender.clone();
-        sumstat_workers.push(std::thread::spawn(move || {
-            sumstat_processor(&predictor_order, &raw_receiver, &aligned_sender)
-        }));
-    }
+    for chunk in chunks.iter() {
+        let (sender, receiver) = crossbeam_channel::unbounded::<AlignedGwasSumstats>();
 
-    let mut ldak_workers = Vec::new();
-    for _ in 0..runtime_setup.n_threads {
-        let tag_info = tag_info.clone();
-        let aligned_receiver = aligned_receiver.clone();
-        let h2_sender = h2_sender.clone();
-        ldak_workers.push(std::thread::spawn(move || {
-            h2_processor(&aligned_receiver, &tag_info, &h2_sender)
-        }));
-    }
+        load_phenotypes_channel(chunk, &tag_info, runtime_setup, sender)?;
 
-    // Wait for workers to finish
-    reader_process.join().unwrap()?;
+        let mut ldak_workers = Vec::new();
+        for _ in 0..runtime_setup.n_threads {
+            let tag_info = tag_info.clone();
+            let receiver = receiver.clone();
+            let h2_sender = h2_sender.clone();
+            ldak_workers.push(std::thread::spawn(move || {
+                h2_processor(&receiver, &tag_info, &h2_sender)
+            }));
+        }
 
-    for worker in sumstat_workers {
-        worker.join().unwrap()?;
-    }
-    drop(aligned_sender);
-
-    for worker in ldak_workers {
-        worker.join().unwrap()?;
+        for worker in ldak_workers {
+            worker.join().unwrap()?;
+        }
     }
     drop(h2_sender);
-
     writer_process.join().unwrap()?;
 
     Ok(())
@@ -262,9 +253,45 @@ fn h2_processor(
         )?;
         let partitions = format_heritability(&sumstats.phenotype, &result, names);
         for partition in partitions {
-            result_sender.send(partition)?;
+            result_sender
+                .send(partition)
+                .with_context(|| format!("Error sending h2 result for {}", &sumstats.phenotype))?;
         }
     }
+
+    Ok(())
+}
+
+fn load_phenotypes_channel(
+    gwas_paths: &[PathBuf],
+    tag_info: &Arc<TagInfo>,
+    runtime_setup: &RuntimeSetup,
+    output: Sender<AlignedGwasSumstats>,
+) -> Result<()> {
+    let predictor_order = Arc::new(tag_info.predictor_order.clone());
+
+    let mut sumstat_workers = Vec::new();
+
+    let (raw_sender, raw_receiver) = crossbeam_channel::unbounded::<RawGwasSumstats>();
+
+    let gwas_paths = Arc::new(gwas_paths.to_vec());
+    let reader_process = std::thread::spawn(move || sumstat_reader(&gwas_paths, &raw_sender));
+
+    for _ in 0..runtime_setup.n_threads {
+        let predictor_order = predictor_order.clone();
+        let raw_receiver = raw_receiver.clone();
+        let output = output.clone();
+        sumstat_workers.push(std::thread::spawn(move || {
+            sumstat_processor(&predictor_order, &raw_receiver, &output)
+        }));
+    }
+
+    reader_process.join().unwrap()?;
+
+    for worker in sumstat_workers {
+        worker.join().unwrap()?;
+    }
+    drop(output);
 
     Ok(())
 }
@@ -274,33 +301,11 @@ fn load_phenotypes_chunk(
     tag_info: &Arc<TagInfo>,
     runtime_setup: &RuntimeSetup,
 ) -> Result<Vec<Arc<AlignedGwasSumstats>>> {
-    let predictor_order = Arc::new(tag_info.predictor_order.clone());
-
-    let mut sumstats = Vec::new();
-    let mut sumstat_workers = Vec::new();
-
-    let (raw_sender, raw_receiver) = crossbeam_channel::unbounded::<RawGwasSumstats>();
     let (aligned_sender, aligned_receiver) = crossbeam_channel::unbounded::<AlignedGwasSumstats>();
 
-    let gwas_paths = Arc::new(gwas_paths.to_vec());
-    let reader_process = std::thread::spawn(move || sumstat_reader(&gwas_paths, &raw_sender));
+    load_phenotypes_channel(gwas_paths, tag_info, runtime_setup, aligned_sender)?;
 
-    for _ in 0..runtime_setup.n_threads {
-        let predictor_order = predictor_order.clone();
-        let raw_receiver = raw_receiver.clone();
-        let aligned_sender = aligned_sender.clone();
-        sumstat_workers.push(std::thread::spawn(move || {
-            sumstat_processor(&predictor_order, &raw_receiver, &aligned_sender)
-        }));
-    }
-
-    reader_process.join().unwrap()?;
-
-    for worker in sumstat_workers {
-        worker.join().unwrap()?;
-    }
-    drop(aligned_sender);
-
+    let mut sumstats = Vec::new();
     while let Ok(sumstat) = aligned_receiver.recv() {
         sumstats.push(Arc::new(sumstat));
     }
@@ -423,6 +428,19 @@ pub fn compute_rg(
     let n_paths = gwas_paths.len() as u64;
     let pb = make_progressbar(n_paths * (n_paths - 1) / 2);
 
+    type Stats<'a> = &'a [Arc<AlignedGwasSumstats>];
+    let compute = |left: Stats, right: Stats, same: bool| {
+        compute_rg_chunk(
+            left,
+            right,
+            same,
+            &result_sender,
+            &tag_info,
+            &pb,
+            runtime_setup,
+        )
+    };
+
     let writer_process = {
         let pb = pb.clone();
         let conn = runtime_setup.db_conn.clone();
@@ -436,36 +454,17 @@ pub fn compute_rg(
     for (i, left_chunk) in chunks.iter().enumerate() {
         let left_chunk = left_chunk.to_vec();
         let left_sumstats = load_phenotypes_chunk(&left_chunk, &tag_info, runtime_setup)?;
-        let pb = pb.clone();
 
-        compute_rg_chunk(
-            &left_sumstats,
-            &left_sumstats,
-            true,
-            &result_sender,
-            &tag_info,
-            &pb,
-            runtime_setup,
-        )?;
+        compute(&left_sumstats, &left_sumstats, true)?;
 
         for (j, right_chunk) in chunks.iter().enumerate() {
             if i >= j {
                 continue;
             }
-
             let right_chunk = right_chunk.to_vec();
             let right_sumstats = load_phenotypes_chunk(&right_chunk, &tag_info, runtime_setup)?;
-            let pb = pb.clone();
 
-            compute_rg_chunk(
-                &left_sumstats,
-                &right_sumstats,
-                false,
-                &result_sender,
-                &tag_info,
-                &pb,
-                runtime_setup,
-            )?;
+            compute(&left_sumstats, &right_sumstats, false)?;
         }
     }
 

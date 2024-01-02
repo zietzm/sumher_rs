@@ -175,7 +175,7 @@ int eigen_invert(double *mat, int length, double *mat2, int ncol, double *mat3,
   // ncol=0 - mat3 NULL, ncol=-1 - mat3 workspace size(mat), ncol>0 - mat3 = RHS
   // type=0 - quiet, type=1 - complain
   int i, j, count, count2, lwork, info;
-  double det, value, alpha, beta, wkopt, *work, *mat4;
+  double value, alpha, beta, wkopt, *work, *mat4;
 
   if (length == 0) {
     return 0;
@@ -202,14 +202,8 @@ int eigen_invert(double *mat, int length, double *mat2, int ncol, double *mat3,
   free(work);
 
   // get log determinant
-  det = 0;
   count = 0;
   for (i = 0; i < length; i++) {
-    if (fabs(mat2[i]) >= 0.000001) {
-      det += log(fabs(mat2[i]));
-    } else {
-      det += log(0.000001);
-    }
     if (mat2[i] <= -0.000001) {
       count++;
     }

@@ -75,7 +75,7 @@ impl DbConnection {
     pub fn write_h2(&self, row: &HsqResult) -> Result<()> {
         self.conn.execute(
             "INSERT INTO h2 (phenotype, component, h2, h2_se) VALUES 
-            (:phenotype, :component, :estimate, :estimate_se)",
+            (:phenotype, :component, :estimate, :se)",
             to_params_named(row)?.to_slice().as_slice(),
         )?;
 
@@ -85,7 +85,7 @@ impl DbConnection {
     pub fn write_rg(&self, row: &RgResult) -> Result<()> {
         self.conn.execute(
             "INSERT INTO rg (phenotype1, phenotype2, component, rg, rg_se) VALUES 
-            (:phenotype1, :phenotype2, :component, :estimate, :estimate_se)",
+            (:phenotype1, :phenotype2, :component, :estimate, :se)",
             to_params_named(row)?.to_slice().as_slice(),
         )?;
 
