@@ -185,7 +185,7 @@ fn rg_result_writer(
     for partition in receiver {
         cache.push(partition);
 
-        if cache.len() >= 10 {
+        if cache.len() >= 50 {
             conn.lock().unwrap().write_rg(&cache)?;
 
             for partition in cache.iter() {
