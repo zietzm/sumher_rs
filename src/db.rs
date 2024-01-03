@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use rusqlite::{Connection, Transaction};
 use serde_rusqlite::to_params_named;
 use std::collections::HashSet;
@@ -96,7 +96,8 @@ fn insert_hsq_data(tx: &Transaction, rows: &[HsqResult]) -> Result<()> {
     )?;
 
     for row in rows.iter() {
-        stmt.execute(to_params_named(row)?.to_slice().as_slice())?;
+        stmt.execute(to_params_named(row)?.to_slice().as_slice())
+            .context(format!("Failed to insert h2 data for {:?}", row))?;
     }
 
     Ok(())
@@ -109,7 +110,8 @@ fn insert_rg_data(tx: &Transaction, rows: &[RgResult]) -> Result<()> {
     )?;
 
     for row in rows.iter() {
-        stmt.execute(to_params_named(row)?.to_slice().as_slice())?;
+        stmt.execute(to_params_named(row)?.to_slice().as_slice())
+            .context(format!("Failed to insert rg data for {:?}", row))?;
     }
 
     Ok(())
