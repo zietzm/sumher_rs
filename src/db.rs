@@ -75,7 +75,8 @@ impl DbConnection {
     pub fn write_h2(&mut self, rows: &[HsqResult]) -> Result<()> {
         let tx = self.conn.transaction()?;
         insert_hsq_data(&tx, rows)?;
-        tx.commit()?;
+        tx.commit()
+            .context(format!("Failed to commit h2 data {:?}", rows[0]))?;
 
         Ok(())
     }
@@ -83,7 +84,8 @@ impl DbConnection {
     pub fn write_rg(&mut self, rows: &[RgResult]) -> Result<()> {
         let tx = self.conn.transaction()?;
         insert_rg_data(&tx, rows)?;
-        tx.commit()?;
+        tx.commit()
+            .context(format!("Failed to commit h2 data {:?}", rows[0]))?;
 
         Ok(())
     }
