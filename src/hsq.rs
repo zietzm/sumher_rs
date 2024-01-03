@@ -223,6 +223,9 @@ pub fn compute_h2(
     let pb = make_progressbar(n_original);
     let gwas_paths = remove_computed_h2(gwas_paths, &runtime_setup.computed);
     pb.lock().unwrap().inc(n_original - gwas_paths.len() as u64);
+    if gwas_paths.is_empty() {
+        return Ok(());
+    }
 
     let alignment_info = check_predictors_aligned(&gwas_paths, runtime_setup.skip_alignment_check)?;
     let mut tag_info = read_tagfile(tag_path.to_str().unwrap())?;
