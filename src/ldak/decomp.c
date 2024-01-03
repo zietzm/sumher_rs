@@ -208,9 +208,9 @@ int eigen_invert(double *mat, int length, double *mat2, int ncol, double *mat3,
       count++;
     }
   }
-  if (count > 1 && type == 1) {
-    printf("Warning, %d eigenvalues are negative\n\n", count);
-  }
+  // if (count > 1 && type == 1) {
+  //   printf("Warning, %d eigenvalues are negative\n\n", count);
+  // }
 
   ////////
 
