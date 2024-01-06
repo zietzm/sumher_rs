@@ -29,8 +29,8 @@ impl DbConnection {
                 "CREATE TABLE IF NOT EXISTS h2 (
                     phenotype TEXT NOT NULL,
                     component TEXT NOT NULL,
-                    h2 FLOAT NOT NULL,
-                    h2_se FLOAT NOT NULL
+                    estimate FLOAT NOT NULL,
+                    std_error FLOAT NOT NULL
                 )",
                 (),
             )?;
@@ -40,8 +40,8 @@ impl DbConnection {
                     phenotype1 TEXT NOT NULL,
                     phenotype2 TEXT NOT NULL,
                     component TEXT NOT NULL,
-                    rg FLOAT NOT NULL,
-                    rg_se FLOAT NOT NULL
+                    estimate FLOAT NOT NULL,
+                    std_error FLOAT NOT NULL
                 )",
                 (),
             )?;
@@ -91,7 +91,7 @@ impl DbConnection {
 
 fn insert_hsq_data(tx: &Transaction, rows: &[HsqResult]) -> Result<()> {
     let mut stmt = tx.prepare_cached(
-        "INSERT INTO h2 (phenotype, component, h2, h2_se) VALUES 
+        "INSERT INTO h2 (phenotype, component, estimate, std_error) VALUES 
         (:phenotype, :component, :estimate, :se)",
     )?;
 
@@ -105,7 +105,7 @@ fn insert_hsq_data(tx: &Transaction, rows: &[HsqResult]) -> Result<()> {
 
 fn insert_rg_data(tx: &Transaction, rows: &[RgResult]) -> Result<()> {
     let mut stmt = tx.prepare_cached(
-        "INSERT INTO rg (phenotype1, phenotype2, component, rg, rg_se) VALUES 
+        "INSERT INTO rg (phenotype1, phenotype2, component, estimate, std_error) VALUES 
         (:phenotype1, :phenotype2, :component, :estimate, :se)",
     )?;
 
