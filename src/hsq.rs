@@ -1,14 +1,14 @@
-use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
+use crate::db::{DbConnection, Progress};
 use crate::ffi::{solve_cors_wrapper, solve_sums_wrapper, SolveCorsResult, SolveSumsResult};
 use crate::io::gwas::{sumstat_processor, sumstat_reader, AlignedGwasSumstats, RawGwasSumstats};
 use crate::io::tagging::{read_tagfile, TagInfo};
-use crate::util::{align_if_possible, check_predictors_aligned, RuntimeSetup};
+use crate::util::{align_if_possible, check_predictors_aligned, make_progressbar, RuntimeSetup};
 
-use anyhow::Result;
-use crossbeam_channel::Receiver;
+use anyhow::{anyhow, Context, Result};
+use crossbeam_channel::{Receiver, Sender};
 use indicatif::ProgressBar;
 use serde::{Serialize, Serializer};
 
@@ -20,7 +20,8 @@ where
 }
 
 #[derive(Debug, Serialize)]
-struct HeritabilityPartition {
+pub struct HsqResult {
+    pub phenotype: String,
     pub component: String,
 
     #[serde(serialize_with = "round_serialize")]
@@ -28,16 +29,12 @@ struct HeritabilityPartition {
 
     #[serde(serialize_with = "round_serialize")]
     pub se: f64,
-
-    #[serde(serialize_with = "round_serialize")]
-    pub influence: f64,
-
-    #[serde(serialize_with = "round_serialize")]
-    pub influence_se: f64,
 }
 
 #[derive(Debug, Serialize)]
-struct GeneticCorrelationPartition {
+pub struct RgResult {
+    pub phenotype1: String,
+    pub phenotype2: String,
     pub component: String,
 
     #[serde(serialize_with = "round_serialize")]
@@ -48,9 +45,10 @@ struct GeneticCorrelationPartition {
 }
 
 fn format_heritability(
+    phenotype: &str,
     result: &SolveSumsResult,
     category_names: &[String],
-) -> Vec<HeritabilityPartition> {
+) -> Vec<HsqResult> {
     let n_categories = (result.stats.len() - 3) / 6;
     let mut partitions = Vec::new();
 
@@ -58,59 +56,59 @@ fn format_heritability(
         let estimate = result.stats[i];
         let se = result.stats[2 * n_categories + 1 + i];
 
-        partitions.push(HeritabilityPartition {
+        partitions.push(HsqResult {
+            phenotype: phenotype.to_string(),
             component: name.clone(),
             estimate,
             se,
-            influence: result.influs[i] * estimate,
-            influence_se: result.influs[i].abs() * se,
         })
     });
 
-    let mut total_influence = 0.0;
-    let mut total_influence_se = 0.0;
-    for i in 0..n_categories {
-        total_influence += result.influs[i] * result.stats[i];
-        for j in 0..n_categories {
-            total_influence_se +=
-                result.influs[i] * result.influs[j] * result.cohers[i + j * n_categories];
-        }
-    }
-
-    partitions.push(HeritabilityPartition {
+    partitions.push(HsqResult {
+        phenotype: phenotype.to_string(),
         component: "Her_All".to_string(),
         estimate: result.stats[n_categories],
         se: result.stats[3 * n_categories + 1],
-        influence: total_influence,
-        influence_se: total_influence_se.sqrt(),
     });
 
     partitions
 }
 
-fn format_genetic_correlation(result: &SolveCorsResult) -> Vec<GeneticCorrelationPartition> {
+fn format_genetic_correlation(
+    phenotype1: String,
+    phenotype2: String,
+    result: &SolveCorsResult,
+) -> Vec<RgResult> {
     let num_parts = result.num_parts as usize;
     let total = 2 * (result.gcon + result.cept) as usize + 3 * num_parts + 1;
     let total2 = num_parts + (result.gcon + result.cept) as usize;
     let se_idx = 2 * total + 4 + num_parts;
 
     let mut partitions = vec![
-        GeneticCorrelationPartition {
+        RgResult {
+            phenotype1: phenotype1.clone(),
+            phenotype2: phenotype2.clone(),
             component: "Her1_All".to_string(),
             estimate: result.stats[total],
             se: result.stats[se_idx],
         },
-        GeneticCorrelationPartition {
+        RgResult {
+            phenotype1: phenotype1.clone(),
+            phenotype2: phenotype2.clone(),
             component: "Her2_All".to_string(),
             estimate: result.stats[total + 1],
             se: result.stats[se_idx + 1],
         },
-        GeneticCorrelationPartition {
+        RgResult {
+            phenotype1: phenotype1.clone(),
+            phenotype2: phenotype2.clone(),
             component: "Coher_All".to_string(),
             estimate: result.stats[total + 2],
             se: result.stats[se_idx + 2],
         },
-        GeneticCorrelationPartition {
+        RgResult {
+            phenotype1: phenotype1.clone(),
+            phenotype2: phenotype2.clone(),
             component: "Cor_All".to_string(),
             estimate: result.stats[total + 3],
             se: result.stats[se_idx + 3],
@@ -118,19 +116,25 @@ fn format_genetic_correlation(result: &SolveCorsResult) -> Vec<GeneticCorrelatio
     ];
 
     if result.gcon == 1 {
-        partitions.push(GeneticCorrelationPartition {
+        partitions.push(RgResult {
+            phenotype1: phenotype1.clone(),
+            phenotype2: phenotype2.clone(),
             component: "Scaling1".to_string(),
             estimate: result.stats[num_parts],
             se: result.stats[2 * num_parts + 4 + total],
         });
-        partitions.push(GeneticCorrelationPartition {
+        partitions.push(RgResult {
+            phenotype1: phenotype1.clone(),
+            phenotype2: phenotype2.clone(),
             component: "Scaling2".to_string(),
             estimate: result.stats[total2 + num_parts],
             se: result.stats[2 * num_parts + 4 + total + total2],
         });
     }
 
-    partitions.push(GeneticCorrelationPartition {
+    partitions.push(RgResult {
+        phenotype1: phenotype1.clone(),
+        phenotype2: phenotype2.clone(),
         component: "Overlap".to_string(),
         estimate: result.stats[2 * total2 + num_parts],
         se: result.stats[2 * num_parts + 4 + total + 2 * total2],
@@ -139,128 +143,130 @@ fn format_genetic_correlation(result: &SolveCorsResult) -> Vec<GeneticCorrelatio
     partitions
 }
 
-fn write_results<P, T: Serialize>(path: &P, results: &[T]) -> Result<()>
-where
-    P: AsRef<Path> + AsRef<std::ffi::OsStr> + ?Sized,
-{
-    // Write using csv and serde serialization
-    let mut writer = csv::WriterBuilder::new().delimiter(b'\t').from_path(path)?;
+fn h2_result_writer(
+    receiver: &Receiver<HsqResult>,
+    progress: &Arc<Mutex<ProgressBar>>,
+    conn: &Mutex<DbConnection>,
+) -> Result<()> {
+    let mut cache = Vec::new();
 
-    for result in results {
-        writer.serialize(result)?;
+    for partition in receiver {
+        cache.push(partition);
+
+        if cache.len() >= 10 {
+            conn.lock().unwrap().write_h2(&cache)?;
+
+            for partition in cache.iter() {
+                if partition.component == "Her_All" {
+                    progress.lock().unwrap().inc(1);
+                }
+            }
+
+            cache.clear();
+        }
+    }
+    conn.lock().unwrap().write_h2(&cache)?;
+    for partition in cache.iter() {
+        if partition.component == "Her_All" {
+            progress.lock().unwrap().inc(1);
+        }
     }
 
-    writer.flush()?;
     Ok(())
 }
 
-fn make_progressbar(n_total: u64) -> Arc<Mutex<ProgressBar>> {
-    let pb = ProgressBar::new(n_total);
-    pb.set_style(
-        indicatif::ProgressStyle::default_bar()
-            .template("[{elapsed_precise}] {bar:40} {pos:>7}/{len:7} ({eta}) {msg}")
-            .unwrap()
-            .progress_chars("##-"),
-    );
-    Arc::new(Mutex::new(pb))
-}
+fn rg_result_writer(
+    receiver: &Receiver<RgResult>,
+    progress: &Arc<Mutex<ProgressBar>>,
+    conn: &Mutex<DbConnection>,
+) -> Result<()> {
+    let mut cache = Vec::new();
 
-fn filter_gwas_paths(
-    gwas_paths: &[PathBuf],
-    output_root: &Path,
-    progress: Arc<Mutex<ProgressBar>>,
-) -> Vec<PathBuf> {
-    let mut filtered = Vec::new();
-    for path in gwas_paths {
-        let output_stem = output_root
-            .file_stem()
-            .unwrap_or(OsStr::new("sumher_rs"))
-            .to_str()
-            .unwrap();
+    for partition in receiver {
+        cache.push(partition);
 
-        let output_name = output_root
-            .parent()
-            .unwrap()
-            .join(format!(
-                "{}.{}",
-                output_stem,
-                path.file_stem().unwrap().to_str().unwrap()
-            ))
-            .to_str()
-            .unwrap()
-            .to_string();
+        if cache.len() >= 50 {
+            conn.lock().unwrap().write_rg(&cache)?;
 
-        let output_path = output_name + ".hsq";
-        let output_path = Path::new(&output_path);
-        if output_path.exists() {
-            progress.lock().unwrap().inc(1);
-        } else {
-            filtered.push(path.clone());
+            for partition in cache.iter() {
+                if partition.component == "Cor_All" {
+                    progress.lock().unwrap().inc(1);
+                }
+            }
+            cache.clear();
         }
     }
-    filtered
+    conn.lock().unwrap().write_rg(&cache)?;
+    for partition in cache.iter() {
+        if partition.component == "Cor_All" {
+            progress.lock().unwrap().inc(1);
+        }
+    }
+
+    Ok(())
+}
+
+fn remove_computed_h2(gwas_paths: &[PathBuf], computed: &Progress) -> Vec<PathBuf> {
+    gwas_paths
+        .iter()
+        .filter(|x| !computed.finished_h2.contains(x.to_str().unwrap()))
+        .cloned()
+        .collect()
 }
 
 pub fn compute_h2(
     tag_path: &Path,
     gwas_paths: &[PathBuf],
-    output_root: &Path,
     runtime_setup: &RuntimeSetup,
-    skip_alignment_check: bool,
 ) -> Result<()> {
-    let output_root = Arc::new(output_root.to_path_buf());
+    let n_original = gwas_paths.len() as u64;
+    let pb = make_progressbar(n_original);
+    let gwas_paths = remove_computed_h2(gwas_paths, &runtime_setup.computed);
+    pb.lock().unwrap().inc(n_original - gwas_paths.len() as u64);
+    if gwas_paths.is_empty() {
+        return Ok(());
+    }
 
-    let pb = make_progressbar(gwas_paths.len() as u64);
-
-    let gwas_paths = filter_gwas_paths(gwas_paths, &output_root, pb.clone());
-    let alignment_info = check_predictors_aligned(&gwas_paths, skip_alignment_check)?;
+    let alignment_info = check_predictors_aligned(&gwas_paths, runtime_setup.skip_alignment_check)?;
     let mut tag_info = read_tagfile(tag_path.to_str().unwrap())?;
     let aligned = align_if_possible(&mut tag_info, alignment_info)?;
     if !aligned {
-        return Err(anyhow::anyhow!(
-            "GWAS summary statistics files are not aligned!"
-        ));
+        return Err(anyhow!("GWAS summary files are not aligned!"));
     }
     let tag_info = Arc::new(tag_info);
-    let predictor_order = Arc::new(tag_info.predictor_order.clone());
 
-    let (raw_sender, raw_receiver) = crossbeam_channel::bounded::<RawGwasSumstats>(10);
-    let (aligned_sender, aligned_receiver) = crossbeam_channel::bounded::<AlignedGwasSumstats>(10);
+    let chunks = gwas_paths
+        .chunks(runtime_setup.chunk_size)
+        .collect::<Vec<_>>();
 
-    let reader_process = std::thread::spawn(move || sumstat_reader(&gwas_paths, &raw_sender));
+    let (h2_sender, h2_receiver) = crossbeam_channel::unbounded::<HsqResult>();
+    let conn = runtime_setup.db_conn.clone();
+    let writer_process = {
+        let h2_receiver = h2_receiver.clone();
+        std::thread::spawn(move || h2_result_writer(&h2_receiver, &pb, &conn))
+    };
 
-    let mut sumstat_workers = Vec::new();
-    for _ in 0..runtime_setup.n_threads {
-        let predictor_order = predictor_order.clone();
-        let raw_receiver = raw_receiver.clone();
-        let aligned_sender = aligned_sender.clone();
-        sumstat_workers.push(std::thread::spawn(move || {
-            sumstat_processor(&predictor_order, &raw_receiver, &aligned_sender)
-        }));
+    for chunk in chunks.iter() {
+        let (sender, receiver) = crossbeam_channel::unbounded::<AlignedGwasSumstats>();
+
+        let mut ldak_workers = Vec::new();
+        for _ in 0..runtime_setup.n_threads {
+            let tag_info = tag_info.clone();
+            let receiver = receiver.clone();
+            let h2_sender = h2_sender.clone();
+            ldak_workers.push(std::thread::spawn(move || {
+                h2_processor(&receiver, &tag_info, &h2_sender)
+            }));
+        }
+
+        load_phenotypes_channel(chunk, &tag_info, runtime_setup, sender)?;
+
+        for worker in ldak_workers {
+            worker.join().unwrap()?;
+        }
     }
-
-    let mut ldak_workers = Vec::new();
-    for _ in 0..runtime_setup.n_threads {
-        let out = output_root.clone();
-        let tag_info = tag_info.clone();
-        let aligned_receiver = aligned_receiver.clone();
-        let pb = pb.clone();
-        ldak_workers.push(std::thread::spawn(move || {
-            h2_processor(&aligned_receiver, &tag_info, &out, pb)
-        }));
-    }
-
-    // Wait for workers to finish
-    reader_process.join().unwrap()?;
-
-    for worker in sumstat_workers {
-        worker.join().unwrap()?;
-    }
-    drop(aligned_sender);
-
-    for worker in ldak_workers {
-        worker.join().unwrap()?;
-    }
+    drop(h2_sender);
+    writer_process.join().unwrap()?;
 
     Ok(())
 }
@@ -268,24 +274,11 @@ pub fn compute_h2(
 fn h2_processor(
     sumstat_receiver: &Receiver<AlignedGwasSumstats>,
     tag_info: &TagInfo,
-    output_root: &Path,
-    progress: Arc<Mutex<ProgressBar>>,
+    result_sender: &Sender<HsqResult>,
 ) -> Result<()> {
+    let names = &tag_info.category_info.names;
+
     for sumstats in sumstat_receiver {
-        let output_stem = output_root
-            .file_stem()
-            .unwrap_or(OsStr::new("sumher_rs"))
-            .to_str()
-            .unwrap();
-
-        let output_name = output_root
-            .parent()
-            .unwrap()
-            .join(format!("{}.{}", output_stem, sumstats.phenotype))
-            .to_str()
-            .unwrap()
-            .to_string();
-
         let result = solve_sums_wrapper(
             &tag_info.tag_vec,
             &sumstats.chisq,
@@ -294,11 +287,47 @@ fn h2_processor(
             &tag_info.category_info.ssums,
             None,
         )?;
-        let partitions = format_heritability(&result, &tag_info.category_info.names);
-        let output_path = output_name + ".hsq";
-        write_results(&output_path, &partitions)?;
-        progress.lock().unwrap().inc(1);
+        let partitions = format_heritability(&sumstats.phenotype, &result, names);
+        for partition in partitions {
+            result_sender
+                .send(partition)
+                .with_context(|| format!("Error sending h2 result for {}", &sumstats.phenotype))?;
+        }
     }
+
+    Ok(())
+}
+
+fn load_phenotypes_channel(
+    gwas_paths: &[PathBuf],
+    tag_info: &Arc<TagInfo>,
+    runtime_setup: &RuntimeSetup,
+    output: Sender<AlignedGwasSumstats>,
+) -> Result<()> {
+    let predictor_order = Arc::new(tag_info.predictor_order.clone());
+
+    let mut sumstat_workers = Vec::new();
+
+    let (raw_sender, raw_receiver) = crossbeam_channel::unbounded::<RawGwasSumstats>();
+
+    let gwas_paths = Arc::new(gwas_paths.to_vec());
+    let reader_process = std::thread::spawn(move || sumstat_reader(&gwas_paths, &raw_sender));
+
+    for _ in 0..runtime_setup.n_threads {
+        let predictor_order = predictor_order.clone();
+        let raw_receiver = raw_receiver.clone();
+        let output = output.clone();
+        sumstat_workers.push(std::thread::spawn(move || {
+            sumstat_processor(&predictor_order, &raw_receiver, &output)
+        }));
+    }
+
+    reader_process.join().unwrap()?;
+
+    for worker in sumstat_workers {
+        worker.join().unwrap()?;
+    }
+    drop(output);
 
     Ok(())
 }
@@ -308,33 +337,11 @@ fn load_phenotypes_chunk(
     tag_info: &Arc<TagInfo>,
     runtime_setup: &RuntimeSetup,
 ) -> Result<Vec<Arc<AlignedGwasSumstats>>> {
-    let predictor_order = Arc::new(tag_info.predictor_order.clone());
-
-    let mut sumstats = Vec::new();
-    let mut sumstat_workers = Vec::new();
-
-    let (raw_sender, raw_receiver) = crossbeam_channel::unbounded::<RawGwasSumstats>();
     let (aligned_sender, aligned_receiver) = crossbeam_channel::unbounded::<AlignedGwasSumstats>();
 
-    let gwas_paths = Arc::new(gwas_paths.to_vec());
-    let reader_process = std::thread::spawn(move || sumstat_reader(&gwas_paths, &raw_sender));
+    load_phenotypes_channel(gwas_paths, tag_info, runtime_setup, aligned_sender)?;
 
-    for _ in 0..runtime_setup.n_threads {
-        let predictor_order = predictor_order.clone();
-        let raw_receiver = raw_receiver.clone();
-        let aligned_sender = aligned_sender.clone();
-        sumstat_workers.push(std::thread::spawn(move || {
-            sumstat_processor(&predictor_order, &raw_receiver, &aligned_sender)
-        }));
-    }
-
-    reader_process.join().unwrap()?;
-
-    for worker in sumstat_workers {
-        worker.join().unwrap()?;
-    }
-    drop(aligned_sender);
-
+    let mut sumstats = Vec::new();
     while let Ok(sumstat) = aligned_receiver.recv() {
         sumstats.push(Arc::new(sumstat));
     }
@@ -346,9 +353,9 @@ fn compute_rg_chunk(
     left_chunk: &[Arc<AlignedGwasSumstats>],
     right_chunk: &[Arc<AlignedGwasSumstats>],
     only_upper_tri: bool,
+    result_sender: &Sender<RgResult>,
     tag_info: &Arc<TagInfo>,
-    output_root: &Path,
-    progress: Arc<Mutex<ProgressBar>>,
+    progress: &Arc<Mutex<ProgressBar>>,
     runtime_setup: &RuntimeSetup,
 ) -> Result<()> {
     let (sender, receiver) =
@@ -369,10 +376,11 @@ fn compute_rg_chunk(
     for _ in 0..runtime_setup.n_threads {
         let tag_info = tag_info.clone();
         let receiver = receiver.clone();
-        let progress = progress.clone();
-        let output_root = output_root.to_path_buf();
+        let result_sender = result_sender.clone();
+        let computed = runtime_setup.computed.clone();
+        let pb = progress.clone();
         ldak_workers.push(std::thread::spawn(move || {
-            rg_processor(&receiver, &tag_info, &output_root, &progress)
+            rg_processor(&receiver, &tag_info, &result_sender, &computed, &pb)
         }));
     }
 
@@ -383,57 +391,27 @@ fn compute_rg_chunk(
     Ok(())
 }
 
-fn make_rg_output_name(
-    output_root: &Path,
-    left: &AlignedGwasSumstats,
-    right: &AlignedGwasSumstats,
-) -> String {
-    let output_stem = output_root
-        .file_stem()
-        .unwrap_or(OsStr::new("sumher_rs"))
-        .to_str()
-        .unwrap();
-
-    output_root
-        .parent()
-        .unwrap()
-        .join(format!(
-            "{}.{}.{}",
-            output_stem, left.phenotype, right.phenotype
-        ))
-        .to_str()
-        .unwrap()
-        .to_string()
-}
-
-fn get_rg_path_to_write(
-    output_root: &Path,
-    left: &AlignedGwasSumstats,
-    right: &AlignedGwasSumstats,
-) -> Option<String> {
-    let forward_path = make_rg_output_name(output_root, left, right) + ".rg";
-    let backward_path = make_rg_output_name(output_root, right, left) + ".rg";
-    if Path::new(&forward_path).exists() || Path::new(&backward_path).exists() {
-        return None;
-    }
-    Some(forward_path)
+fn rg_pre_computed(phenotype1: &str, phenotype2: &str, computed: &Progress) -> bool {
+    computed
+        .finished_rg
+        .contains(&(phenotype1.to_string(), phenotype2.to_string()))
+        || computed
+            .finished_rg
+            .contains(&(phenotype2.to_string(), phenotype1.to_string()))
 }
 
 fn rg_processor(
     receiver: &Receiver<(Arc<AlignedGwasSumstats>, Arc<AlignedGwasSumstats>)>,
     tag_info: &Arc<TagInfo>,
-    output_root: &Path,
+    result_sender: &Sender<RgResult>,
+    precomputed: &Progress,
     progress: &Arc<Mutex<ProgressBar>>,
 ) -> Result<()> {
     for (left, right) in receiver {
-        let output_name = get_rg_path_to_write(output_root, &left, &right);
-        if output_name.is_none() {
+        if rg_pre_computed(&left.phenotype, &right.phenotype, precomputed) {
             progress.lock().unwrap().inc(1);
             continue;
         }
-        let output_name = output_name.unwrap();
-
-        let output_path = output_name + ".rg";
 
         let result = solve_cors_wrapper(
             &tag_info.tag_vec,
@@ -445,8 +423,15 @@ fn rg_processor(
         );
         match result {
             Ok(result) => {
-                let partitions = format_genetic_correlation(&result);
-                write_results(&output_path, &partitions)?;
+                let partitions = format_genetic_correlation(
+                    left.phenotype.clone(),
+                    right.phenotype.clone(),
+                    &result,
+                );
+
+                for partition in partitions {
+                    result_sender.send(partition)?;
+                }
             }
             Err(e) => {
                 println!(
@@ -455,7 +440,6 @@ fn rg_processor(
                 );
             }
         }
-        progress.lock().unwrap().inc(1);
     }
 
     Ok(())
@@ -464,13 +448,10 @@ fn rg_processor(
 pub fn compute_rg(
     tag_path: &Path,
     gwas_paths: &[PathBuf],
-    output_root: &Path,
-    chunk_size: usize,
     runtime_setup: &RuntimeSetup,
-    skip_alignment_check: bool,
 ) -> Result<()> {
     let mut tag_info = read_tagfile(tag_path.to_str().unwrap())?;
-    let alignment_info = check_predictors_aligned(gwas_paths, skip_alignment_check)?;
+    let alignment_info = check_predictors_aligned(gwas_paths, runtime_setup.skip_alignment_check)?;
     let aligned = align_if_possible(&mut tag_info, alignment_info)?;
     if !aligned {
         return Err(anyhow::anyhow!(
@@ -479,44 +460,52 @@ pub fn compute_rg(
     }
     let tag_info = Arc::new(tag_info);
 
+    let (result_sender, result_receiver) = crossbeam_channel::unbounded::<RgResult>();
     let n_paths = gwas_paths.len() as u64;
     let pb = make_progressbar(n_paths * (n_paths - 1) / 2);
 
-    let chunks = gwas_paths.chunks(chunk_size / 2).collect::<Vec<_>>();
+    type Stats<'a> = &'a [Arc<AlignedGwasSumstats>];
+    let compute = |left: Stats, right: Stats, same: bool| {
+        compute_rg_chunk(
+            left,
+            right,
+            same,
+            &result_sender,
+            &tag_info,
+            &pb,
+            runtime_setup,
+        )
+    };
+
+    let writer_process = {
+        let pb = pb.clone();
+        let conn = runtime_setup.db_conn.clone();
+        std::thread::spawn(move || rg_result_writer(&result_receiver, &pb, &conn))
+    };
+
+    let chunks = gwas_paths
+        .chunks(runtime_setup.chunk_size / 2)
+        .collect::<Vec<_>>();
 
     for (i, left_chunk) in chunks.iter().enumerate() {
         let left_chunk = left_chunk.to_vec();
         let left_sumstats = load_phenotypes_chunk(&left_chunk, &tag_info, runtime_setup)?;
 
-        compute_rg_chunk(
-            &left_sumstats,
-            &left_sumstats,
-            true,
-            &tag_info,
-            output_root,
-            pb.clone(),
-            runtime_setup,
-        )?;
+        compute(&left_sumstats, &left_sumstats, true)?;
 
         for (j, right_chunk) in chunks.iter().enumerate() {
             if i >= j {
                 continue;
             }
-
             let right_chunk = right_chunk.to_vec();
             let right_sumstats = load_phenotypes_chunk(&right_chunk, &tag_info, runtime_setup)?;
 
-            compute_rg_chunk(
-                &left_sumstats,
-                &right_sumstats,
-                false,
-                &tag_info,
-                output_root,
-                pb.clone(),
-                runtime_setup,
-            )?;
+            compute(&left_sumstats, &right_sumstats, false)?;
         }
     }
+
+    drop(result_sender);
+    writer_process.join().unwrap()?;
 
     Ok(())
 }

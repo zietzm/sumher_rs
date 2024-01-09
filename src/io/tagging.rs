@@ -205,7 +205,8 @@ pub fn read_tagfile(filename: &str) -> Result<TagInfo> {
         .with_n_rows(Some(category_info.n_variants))
         .with_ignore_errors(true)
         .with_dtypes(Some(Arc::new(schema)))
-        .finish()?;
+        .finish()
+        .with_context(|| format!("Failed to read tagfile {}", filename))?;
 
     TagInfo::from_dataframe(df, category_info)
 }
