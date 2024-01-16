@@ -8,14 +8,14 @@ To do so, it avoids re-reading files from disk and avoids unnecessarily repeatin
 This package is most suited to pre-aligned GWAS summary statistics.
 It requires the same inputs as LDAK/SumHer, but can efficiently run for multiple phenotypes at once.
 
+Rather than writing several files for every phenotype or phenotype combination, `sumher_rs` writes outputs to a [SQLite3](https://www.sqlite.org/index.html) database file.
+
 ## Installation
 
 If cargo is not installed, see [cargo installation](https://doc.rust-lang.org/cargo/getting-started/installation.html).
 
 ```bash
-git clone --depth 1 https://github.com/zietzm/sumher_rs.git
-
-cargo install --path sumher_rs
+cargo install --git https://github.com/zietzm/sumher_rs
 ```
 
 ## Usage
