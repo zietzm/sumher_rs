@@ -4,3 +4,4 @@ __pycache__
 progress.txt
 example
 .vscode
+.DS_Store
