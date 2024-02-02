@@ -20,6 +20,7 @@ polars = { version = "0.35.4", features = ["lazy", "ndarray", "performant", "sig
 rusqlite = "0.30.0"
 serde = "1.0.193"
 serde_rusqlite = "0.34.0"
+tempfile = "3.9.0"
 
 [build-dependencies]
 cc = "1.0.83"
