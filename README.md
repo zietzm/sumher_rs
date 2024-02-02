@@ -1,5 +1,7 @@
 # `sumher_rs`
 
+[![Rust](https://github.com/zietzm/sumher_rs/actions/workflows/rust.yml/badge.svg?branch=main)](https://github.com/zietzm/sumher_rs/actions/workflows/rust.yml)
+
 [LDAK](https://dougspeed.com/) is a powerful piece of software for genetics.
 SumHer is a tool for estimating heritability and genetic correlation using GWAS summary statistics that is [implemented in LDAK](https://dougspeed.com/sumher/).
 
