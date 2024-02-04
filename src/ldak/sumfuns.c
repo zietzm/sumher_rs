@@ -58,14 +58,14 @@ int solve_sums(double *stats, double *likes, double *cohers, double *influs,
   // printf("\n");
   //
   // printf("stags: ");
-  // for (int i = 0; i < 5; i++) {
+  // for (int i = 0; i < 3; i++) {
   //   printf("%f ", stags[i]);
   // }
   // printf("\n");
   //
   // printf("svars: ");
   // for (int i = 0; i < num_parts; i++) {
-  //   for (int k = 0; k < 5; k++) {
+  //   for (int k = 0; k < 3; k++) {
   //     printf("%f ", svars[i][k]);
   //   }
   // }
@@ -80,13 +80,13 @@ int solve_sums(double *stats, double *likes, double *cohers, double *influs,
   // printf("\n");
   //
   // printf("snss: ");
-  // for (int i = 0; i < 5; i++) {
+  // for (int i = 0; i < 3; i++) {
   //   printf("%f ", snss[i]);
   // }
   // printf("\n");
   //
   // printf("schis: ");
-  // for (int i = 0; i < 5; i++) {
+  // for (int i = 0; i < 3; i++) {
   //   printf("%f ", schis[i]);
   // }
   // printf("\n");

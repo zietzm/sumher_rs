@@ -213,3 +213,79 @@ pub fn solve_cors_wrapper(
         cept,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_solve_sums_wrapper() {
+        let tagging = vec![1.0, 2.0, 3.0];
+        let chisqs = vec![1.0, 2.0, 3.0];
+        let sample_sizes = vec![1.0, 2.0, 3.0];
+        let category_vals = vec![vec![1.0, 2.0, 3.0], vec![4.0, 5.0, 6.0]];
+        let category_contribs = vec![vec![1.0, 2.0, 3.0], vec![4.0, 5.0, 6.0]];
+
+        let result = solve_sums_wrapper(
+            &tagging,
+            &chisqs,
+            &sample_sizes,
+            &category_vals,
+            &category_contribs,
+            None,
+        )
+        .unwrap();
+
+        // Check sizes
+        assert_eq!(result.stats.len(), 3 * (2 + 1 + 2));
+        assert_eq!(result.likes.len(), 11);
+        assert_eq!(result.cohers.len(), 2 * 2);
+        assert_eq!(result.influs.len(), 2);
+
+        // Check values
+        let desired_stats = [
+            0.4791464197764975,
+            -0.5588545017977516,
+            -0.07970808202125412,
+            0.2556046190573969,
+            1.3577311773082386,
+            2.3675053949121336,
+            4.497316861083112,
+            2.2773633495918704,
+            0.763803940571641,
+            5.227708866852336,
+            146.47111303693012,
+            146.47111303693012,
+            0.0,
+            87.88266782215808,
+            439.41333911079033,
+        ];
+        assert_eq!(result.stats, desired_stats);
+
+        let desired_likes = [
+            -3.5411094874599045,
+            -3.3166019866559435,
+            -2.601387310875233,
+            0.6760515111840476,
+            -0.8075528916021616,
+            1.0601008469882118,
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+        ];
+        assert_eq!(result.likes, desired_likes);
+
+        let desired_cohers = [
+            5.605081794938058,
+            -10.322278458928105,
+            -10.322278458928107,
+            20.22585894898246,
+        ];
+        assert_eq!(result.cohers, desired_cohers);
+
+        let desired_influs = [4.363636363636364, 1.8545454545454547];
+        assert_eq!(result.influs, desired_influs);
+    }
+}
