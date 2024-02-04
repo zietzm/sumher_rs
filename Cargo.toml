@@ -16,9 +16,9 @@ indicatif = { version = "0.17.7", features = ["rayon"] }
 itertools = "0.12.0"
 ndarray = "0.15.6"
 num_cpus = "1.16.0"
-polars = { version = "0.35.4", features = ["lazy", "ndarray", "performant", "sign"] }
+rayon = "1.8.1"
 rusqlite = "0.30.0"
-serde = "1.0.193"
+serde = {version = "1.0.193", features = ["derive"]}
 serde_rusqlite = "0.34.0"
 tempfile = "3.9.0"
 

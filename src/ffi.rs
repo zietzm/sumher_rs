@@ -1,4 +1,4 @@
-use crate::io::gwas::AlignedGwasSumstats;
+use crate::io::gwas::GwasSumstats;
 
 use anyhow::{anyhow, Result};
 
@@ -165,8 +165,8 @@ pub fn solve_sums_wrapper(
 
 pub fn solve_cors_wrapper(
     tagging: &[f64],
-    gwas_sumstats_1: &AlignedGwasSumstats,
-    gwas_sumstats_2: &AlignedGwasSumstats,
+    gwas_sumstats_1: &GwasSumstats,
+    gwas_sumstats_2: &GwasSumstats,
     category_vals: &[Vec<f64>],
     category_contribs: &[Vec<f64>],
     options: Option<SolveCorsOptions>,
@@ -192,10 +192,10 @@ pub fn solve_cors_wrapper(
             tagging.as_ptr(),
             svars.as_ptr(),
             ssums.as_ptr(),
-            gwas_sumstats_1.sample_sizes.as_ptr(),
+            gwas_sumstats_1.sample_size.as_ptr(),
             gwas_sumstats_1.chisq.as_ptr(),
             gwas_sumstats_1.rhos.as_ptr(),
-            gwas_sumstats_2.sample_sizes.as_ptr(),
+            gwas_sumstats_2.sample_size.as_ptr(),
             gwas_sumstats_2.chisq.as_ptr(),
             gwas_sumstats_2.rhos.as_ptr(),
             options.as_ref().and_then(|x| x.tol).unwrap_or(0.0001),
@@ -212,4 +212,88 @@ pub fn solve_cors_wrapper(
         gcon,
         cept,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_solve_sums_wrapper() {
+        let tagging = vec![1.0, 2.0, 3.0];
+        let chisqs = vec![1.0, 2.0, 3.0];
+        let sample_sizes = vec![1.0, 2.0, 3.0];
+        let category_vals = vec![vec![1.0, 2.0, 3.0], vec![4.0, 5.0, 6.0]];
+        let category_contribs = vec![vec![1.0, 2.0, 3.0], vec![4.0, 5.0, 6.0]];
+
+        let result = solve_sums_wrapper(
+            &tagging,
+            &chisqs,
+            &sample_sizes,
+            &category_vals,
+            &category_contribs,
+            None,
+        )
+        .unwrap();
+
+        // Check sizes
+        assert_eq!(result.stats.len(), 3 * (2 + 1 + 2));
+        assert_eq!(result.likes.len(), 11);
+        assert_eq!(result.cohers.len(), 2 * 2);
+        assert_eq!(result.influs.len(), 2);
+
+        // Check values
+        let desired_stats = [
+            0.4791464197764975,
+            -0.5588545017977516,
+            -0.07970808202125412,
+            0.2556046190573969,
+            1.3577311773082386,
+            2.3675053949121336,
+            4.497316861083112,
+            2.2773633495918704,
+            0.763803940571641,
+            5.227708866852336,
+            146.47111303693012,
+            146.47111303693012,
+            0.0,
+            87.88266782215808,
+            439.41333911079033,
+        ];
+        for (i, &x) in result.stats.iter().enumerate() {
+            assert!((x - desired_stats[i]).abs() < 1e-10);
+        }
+
+        let desired_likes = [
+            -3.5411094874599045,
+            -3.3166019866559435,
+            -2.601387310875233,
+            0.6760515111840476,
+            -0.8075528916021616,
+            1.0601008469882118,
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+        ];
+        for (i, &x) in result.likes.iter().enumerate() {
+            assert!((x - desired_likes[i]).abs() < 1e-10);
+        }
+
+        let desired_cohers = [
+            5.605081794938058,
+            -10.322278458928105,
+            -10.322278458928107,
+            20.22585894898246,
+        ];
+        for (i, &x) in result.cohers.iter().enumerate() {
+            assert!((x - desired_cohers[i]).abs() < 1e-10);
+        }
+
+        let desired_influs = [4.363636363636364, 1.8545454545454547];
+        for (i, &x) in result.influs.iter().enumerate() {
+            assert!((x - desired_influs[i]).abs() < 1e-10);
+        }
+    }
 }

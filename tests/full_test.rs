@@ -5,8 +5,12 @@ use std::process::Command;
 use assert_cmd::prelude::*;
 
 #[test]
-fn cli_h2() {
+fn cli_h2_neur() {
     compute_h2("neur");
+}
+
+#[test]
+fn cli_h2_height() {
     compute_h2("height");
 }
 

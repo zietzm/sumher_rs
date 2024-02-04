@@ -2,14 +2,15 @@ use clap::{Args, Parser, Subcommand};
 use glob::glob;
 use std::path::PathBuf;
 
+mod align;
 mod db;
 mod ffi;
 mod hsq;
 mod io;
+mod rg;
 mod util;
 
 use crate::db::DbConnection;
-use crate::hsq::{compute_h2, compute_rg};
 use crate::util::{format_plink_sumstats, RuntimeSetup};
 
 #[derive(Parser, Debug)]
@@ -69,7 +70,7 @@ enum Command {
         #[arg(long)]
         rg_tagfile: PathBuf,
     },
-    /// Compute just heritabilities
+    // Compute just heritabilities
     H2 {
         #[command(flatten)]
         shared_args: SharedArgs,
@@ -78,7 +79,6 @@ enum Command {
         #[arg(short, long)]
         tagfile: PathBuf,
     },
-
     /// Compute just genetic correlations
     Rg {
         #[command(flatten)]
@@ -91,6 +91,11 @@ enum Command {
 }
 
 fn validate_shared_args(args: &mut SharedArgs) -> RuntimeSetup {
+    rayon::ThreadPoolBuilder::new()
+        .num_threads(args.n_threads)
+        .build_global()
+        .unwrap();
+
     if args.gwas_results.is_empty() {
         panic!("No GWAS results files specified");
     }
@@ -137,13 +142,13 @@ fn main() {
             rg_tagfile,
         } => {
             let rt = validate_shared_args(&mut shared_args);
-            let result = compute_h2(&h2_tagfile, &shared_args.gwas_results, &rt);
+            let result = hsq::compute_h2(h2_tagfile, &shared_args.gwas_results, &rt);
             match result {
                 Ok(_) => println!("Success on heritability!"),
                 Err(e) => println!("Error: {}", e),
             }
 
-            let rg_result = compute_rg(&rg_tagfile, &shared_args.gwas_results, &rt);
+            let rg_result = rg::compute_rg(rg_tagfile, &shared_args.gwas_results, &rt);
             match rg_result {
                 Ok(_) => println!("Success on genetic correlation!"),
                 Err(e) => println!("Error: {}", e),
@@ -154,7 +159,8 @@ fn main() {
             tagfile,
         } => {
             let rt = validate_shared_args(&mut shared_args);
-            let result = compute_h2(&tagfile, &shared_args.gwas_results, &rt);
+            let result = hsq::compute_h2(tagfile, &shared_args.gwas_results, &rt);
+            // let result = compute_h2(&tagfile, &shared_args.gwas_results, &rt);
             match result {
                 Ok(_) => println!("Success on heritability!"),
                 Err(e) => println!("Error: {}", e),
@@ -165,7 +171,7 @@ fn main() {
             tagfile,
         } => {
             let rt = validate_shared_args(&mut shared_args);
-            let result = compute_rg(&tagfile, &shared_args.gwas_results, &rt);
+            let result = rg::compute_rg(tagfile, &shared_args.gwas_results, &rt);
             match result {
                 Ok(_) => println!("Success on genetic correlation!"),
                 Err(e) => println!("Error: {}", e),
