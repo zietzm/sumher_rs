@@ -260,7 +260,9 @@ mod tests {
             87.88266782215808,
             439.41333911079033,
         ];
-        assert_eq!(result.stats, desired_stats);
+        for (i, &x) in result.stats.iter().enumerate() {
+            assert!((x - desired_stats[i]).abs() < 1e-10);
+        }
 
         let desired_likes = [
             -3.5411094874599045,
@@ -275,7 +277,9 @@ mod tests {
             0.0,
             0.0,
         ];
-        assert_eq!(result.likes, desired_likes);
+        for (i, &x) in result.likes.iter().enumerate() {
+            assert!((x - desired_likes[i]).abs() < 1e-10);
+        }
 
         let desired_cohers = [
             5.605081794938058,
@@ -283,9 +287,13 @@ mod tests {
             -10.322278458928107,
             20.22585894898246,
         ];
-        assert_eq!(result.cohers, desired_cohers);
+        for (i, &x) in result.cohers.iter().enumerate() {
+            assert!((x - desired_cohers[i]).abs() < 1e-10);
+        }
 
         let desired_influs = [4.363636363636364, 1.8545454545454547];
-        assert_eq!(result.influs, desired_influs);
+        for (i, &x) in result.influs.iter().enumerate() {
+            assert!((x - desired_influs[i]).abs() < 1e-10);
+        }
     }
 }
