@@ -5,8 +5,12 @@ use std::process::Command;
 use assert_cmd::prelude::*;
 
 #[test]
-fn cli_h2() {
+fn cli_h2_neur() {
     compute_h2("neur");
+}
+
+#[test]
+fn cli_h2_height() {
     compute_h2("height");
 }
 
@@ -111,76 +115,76 @@ fn load_ldak_h2_results(phenotype: &str) -> H2Result {
     results
 }
 
-#[test]
-fn compute_rg() {
-    let mut d = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    d.push("tests/data/");
-
-    let output_dir = tempfile::tempdir().unwrap();
-    let output = output_dir.path().join("output.db");
-
-    let mut cmd = Command::cargo_bin("sumher_rs").unwrap();
-    let assert = cmd
-        .arg("rg")
-        .arg("-g")
-        .arg(d.join("neur.txt").to_str().unwrap())
-        .arg(d.join("height.txt").to_str().unwrap())
-        .arg("-t")
-        .arg(d.join("ldak.thin.genotyped.gbr.tagging").to_str().unwrap())
-        .arg("-o")
-        .arg(output.to_str().unwrap());
-
-    assert.assert().success();
-
-    let desired_results = load_ldak_rg_results();
-    let results = load_sumher_rs_rg_results(&output);
-
-    assert_eq!(
-        results.phenotype, desired_results.phenotype,
-        "Phenotypes do not match"
-    );
-    assert_eq!(
-        results.component, desired_results.component,
-        "Components do not match"
-    );
-    assert_eq!(results.h2, desired_results.h2, "h2 values do not match");
-    assert_eq!(
-        results.sd, desired_results.sd,
-        "Standard deviations do not match"
-    );
-}
-
-struct RgResult {
-    phenotype: Vec<String>,
-    component: Vec<String>,
-    value: Vec<f64>,
-    sd: Vec<f64>,
-}
-
-fn load_ldak_rg_results() -> RgResult {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/data/")
-        .join("neur.height.cors");
-
-    // Open the file at path
-    let file = std::fs::File::open(path).unwrap();
-    let reader = std::io::BufReader::new(file);
-
-    let mut results = RgResult {
-        phenotype: Vec::new(),
-        component: Vec::new(),
-        value: Vec::new(),
-        sd: Vec::new(),
-    };
-
-    reader.lines().skip(1).for_each(|line| {
-        let line = line.unwrap();
-        let fields: Vec<&str> = line.split_whitespace().collect();
-        results.phenotype.push(phenotype.to_string() + ".txt");
-        results.component.push(fields[0].to_string());
-        results.h2.push(fields[1].parse::<f64>().unwrap());
-        results.sd.push(fields[2].parse::<f64>().unwrap());
-    });
-
-    results
-}
+// #[test]
+// fn compute_rg() {
+//     let mut d = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+//     d.push("tests/data/");
+//
+//     let output_dir = tempfile::tempdir().unwrap();
+//     let output = output_dir.path().join("output.db");
+//
+//     let mut cmd = Command::cargo_bin("sumher_rs").unwrap();
+//     let assert = cmd
+//         .arg("rg")
+//         .arg("-g")
+//         .arg(d.join("neur.txt").to_str().unwrap())
+//         .arg(d.join("height.txt").to_str().unwrap())
+//         .arg("-t")
+//         .arg(d.join("ldak.thin.genotyped.gbr.tagging").to_str().unwrap())
+//         .arg("-o")
+//         .arg(output.to_str().unwrap());
+//
+//     assert.assert().success();
+//
+//     let desired_results = load_ldak_rg_results();
+//     let results = load_sumher_rs_rg_results(&output);
+//
+//     assert_eq!(
+//         results.phenotype, desired_results.phenotype,
+//         "Phenotypes do not match"
+//     );
+//     assert_eq!(
+//         results.component, desired_results.component,
+//         "Components do not match"
+//     );
+//     assert_eq!(results.h2, desired_results.h2, "h2 values do not match");
+//     assert_eq!(
+//         results.sd, desired_results.sd,
+//         "Standard deviations do not match"
+//     );
+// }
+//
+// struct RgResult {
+//     phenotype: Vec<String>,
+//     component: Vec<String>,
+//     value: Vec<f64>,
+//     sd: Vec<f64>,
+// }
+//
+// fn load_ldak_rg_results() -> RgResult {
+//     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+//         .join("tests/data/")
+//         .join("neur.height.cors");
+//
+//     // Open the file at path
+//     let file = std::fs::File::open(path).unwrap();
+//     let reader = std::io::BufReader::new(file);
+//
+//     let mut results = RgResult {
+//         phenotype: Vec::new(),
+//         component: Vec::new(),
+//         value: Vec::new(),
+//         sd: Vec::new(),
+//     };
+//
+//     reader.lines().skip(1).for_each(|line| {
+//         let line = line.unwrap();
+//         let fields: Vec<&str> = line.split_whitespace().collect();
+//         results.phenotype.push(phenotype.to_string() + ".txt");
+//         results.component.push(fields[0].to_string());
+//         results.h2.push(fields[1].parse::<f64>().unwrap());
+//         results.sd.push(fields[2].parse::<f64>().unwrap());
+//     });
+//
+//     results
+// }

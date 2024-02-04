@@ -1,4 +1,4 @@
-use crate::io::gwas::AlignedGwasSumstats;
+use crate::io::gwas::GwasSumstats;
 
 use anyhow::{anyhow, Result};
 
@@ -165,8 +165,8 @@ pub fn solve_sums_wrapper(
 
 pub fn solve_cors_wrapper(
     tagging: &[f64],
-    gwas_sumstats_1: &AlignedGwasSumstats,
-    gwas_sumstats_2: &AlignedGwasSumstats,
+    gwas_sumstats_1: &GwasSumstats,
+    gwas_sumstats_2: &GwasSumstats,
     category_vals: &[Vec<f64>],
     category_contribs: &[Vec<f64>],
     options: Option<SolveCorsOptions>,
@@ -192,10 +192,10 @@ pub fn solve_cors_wrapper(
             tagging.as_ptr(),
             svars.as_ptr(),
             ssums.as_ptr(),
-            gwas_sumstats_1.sample_sizes.as_ptr(),
+            gwas_sumstats_1.sample_size.as_ptr(),
             gwas_sumstats_1.chisq.as_ptr(),
             gwas_sumstats_1.rhos.as_ptr(),
-            gwas_sumstats_2.sample_sizes.as_ptr(),
+            gwas_sumstats_2.sample_size.as_ptr(),
             gwas_sumstats_2.chisq.as_ptr(),
             gwas_sumstats_2.rhos.as_ptr(),
             options.as_ref().and_then(|x| x.tol).unwrap_or(0.0001),

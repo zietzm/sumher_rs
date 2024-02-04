@@ -37,6 +37,60 @@ int solve_sums(double *stats, double *likes, double *cohers, double *influs,
 // sflag=3 - just get expectations and likelihood, sflag=4 - LDSC, sflag=5 -
 // divide+updating
 {
+  // Print the first few of each input variable
+  // printf("num_parts: %d\n", num_parts);
+  // printf("gcon: %d\n", gcon);
+  // printf("cept: %d\n", cept);
+  // printf("num_blocks: %d\n", num_blocks);
+  // printf("length: %d\n", length);
+  // printf("ncv: %d\n", ncv);
+  //
+  // printf("cvindex: ");
+  // for (int i = 0; i < ncv; i++) {
+  //   printf("%d ", cvindex[i]);
+  // }
+  // printf("\n");
+  //
+  // printf("cvexps: ");
+  // for (int i = 0; i < ncv; i++) {
+  //   printf("%f ", cvexps[i]);
+  // }
+  // printf("\n");
+  //
+  // printf("stags: ");
+  // for (int i = 0; i < 5; i++) {
+  //   printf("%f ", stags[i]);
+  // }
+  // printf("\n");
+  //
+  // printf("svars: ");
+  // for (int i = 0; i < num_parts; i++) {
+  //   for (int k = 0; k < 5; k++) {
+  //     printf("%f ", svars[i][k]);
+  //   }
+  // }
+  // printf("\n");
+  //
+  // printf("ssums: ");
+  // for (int i = 0; i < num_parts; i++) {
+  //   for (int k = 0; k < (num_parts + 2); k++) {
+  //     printf("%f ", ssums[i][k]);
+  //   }
+  // }
+  // printf("\n");
+  //
+  // printf("snss: ");
+  // for (int i = 0; i < 5; i++) {
+  //   printf("%f ", snss[i]);
+  // }
+  // printf("\n");
+  //
+  // printf("schis: ");
+  // for (int i = 0; i < 5; i++) {
+  //   printf("%f ", schis[i]);
+  // }
+  // printf("\n");
+
   int return_code = 0;
 
   int j, j2, p, q, q2, q3, count, count2, start, end, mark, one = 1;
@@ -278,6 +332,25 @@ int solve_sums(double *stats, double *likes, double *cohers, double *influs,
     for (q = 0; q < num_parts; q++) {
       sumhers += thetas[q] / gc * ssums[q][q] / scale;
     }
+
+    // if (count == 0) {
+    //   printf("Start\t");
+    // } else {
+    //   printf("%d\t", count);
+    // }
+    // printf("%.4f\t", sumhers);
+    // if (gcon == 1) {
+    //   printf("%.4f\t", gc);
+    // }
+    // if (cept == 1) {
+    //   printf("%.4f\t", 1 + thetas[num_parts + gcon] / gc);
+    // }
+    // printf("%.2f\t", like);
+    // if (count == 0) {
+    //   printf("n/a\t\t%.6f\n", tol);
+    // } else {
+    //   printf("%.6f\t%.6f\n", diff, tol);
+    // }
 
     if (sflag == 3) {
       break;

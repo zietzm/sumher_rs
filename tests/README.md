@@ -34,7 +34,7 @@ xsv join -d ' ' Predictor ldak.thin.genotyped.gbr.tagging Predictor neur.txt.old
 
 # Height
 xsv join -d ' ' Predictor ldak.thin.genotyped.gbr.tagging Predictor height.txt.old |
-    xsv select 'Predictor,A1,A2,Direction,Stat,n' |
+    xsv select 'Predictor,A1,A2,Z,n' |
     xsv fmt -t ' ' -o height.txt
 ```
 

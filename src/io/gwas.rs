@@ -1,118 +1,91 @@
-use std::path::{Path, PathBuf};
+use std::fs::File;
+use std::path::Path;
 
 use anyhow::Result;
-use crossbeam_channel::{Receiver, Sender};
 use csv::ReaderBuilder;
-
+use itertools::izip;
 use serde::Deserialize;
 
+use crate::io::common::get_delimiter;
+
 #[derive(Clone, Debug, Deserialize)]
-pub struct GwasResultLine {
+pub struct GwasLine {
     #[serde(rename = "Predictor")]
     pub predictor: String,
-    pub n: f64,
+    pub n: u32,
     #[serde(rename = "Z")]
     pub z: f64,
 }
 
-pub struct RawGwasSumstats {
+#[derive(Clone, Debug)]
+pub struct GwasSumstats {
     pub phenotype: String,
-    pub results: Vec<GwasResultLine>,
-}
+    pub results: Vec<GwasLine>,
 
-pub struct AlignedGwasSumstats {
-    pub phenotype: String,
+    pub predictors: Vec<String>,
+    pub z_scores: Vec<f64>,
     pub chisq: Vec<f64>,
-    pub sample_sizes: Vec<f64>,
+    pub sample_size: Vec<f64>,
     pub rhos: Vec<f64>,
 }
 
-/// Read GWAS summary statistics from an LDAK-formatted file.
-pub fn read_sumstats(path: &Path) -> Result<RawGwasSumstats> {
-    let mut reader = ReaderBuilder::new()
-        .has_headers(true)
-        .delimiter(b'\t')
-        .from_path(path)?;
+impl GwasSumstats {
+    pub fn new(phenotype: String, results: Vec<GwasLine>) -> Self {
+        let predictors = results
+            .iter()
+            .map(|x| x.predictor.clone())
+            .collect::<Vec<String>>();
+        let z_scores = results.iter().map(|x| x.z).collect::<Vec<f64>>();
+        let chisq = results.iter().map(|x| x.z * x.z).collect::<Vec<f64>>();
+        let sample_size = results.iter().map(|x| x.n as f64).collect::<Vec<f64>>();
 
-    let mut results = Vec::new();
-    for result in reader.deserialize() {
-        let record: GwasResultLine = result?;
-        results.push(record);
+        let mut rhos = Vec::with_capacity(results.len());
+        for (&z, &c, &n) in izip!(&z_scores, &chisq, &sample_size) {
+            rhos.push(z.signum() * (c / (c + n)).sqrt());
+        }
+
+        GwasSumstats {
+            phenotype,
+            results,
+            predictors,
+            chisq,
+            sample_size,
+            z_scores,
+            rhos,
+        }
     }
 
-    let phenotype = path.to_str().unwrap().to_string();
+    /// Read GWAS summary statistics from an LDAK-formatted file.
+    pub fn from_file<P>(path: P) -> Result<Self>
+    where
+        P: AsRef<Path>,
+    {
+        let delimiter = get_delimiter(&path)?;
 
-    Ok(RawGwasSumstats { phenotype, results })
-}
+        let file = File::open(&path)?;
+        let mut reader = ReaderBuilder::new()
+            .has_headers(true)
+            .delimiter(delimiter)
+            .from_reader(file);
 
-fn align_sumstats(
-    predictor_order: &[String],
-    raw_stats: &[GwasResultLine],
-) -> Result<Vec<GwasResultLine>> {
-    let aligned_stats = raw_stats
-        .iter()
-        .filter(|s| predictor_order.iter().any(|p| p == &s.predictor))
-        .cloned()
-        .collect::<Vec<GwasResultLine>>();
+        let mut results = reader
+            .deserialize()
+            .collect::<Result<Vec<GwasLine>, csv::Error>>()?;
 
-    Ok(aligned_stats)
-}
+        results.iter_mut().for_each(|x| {
+            if x.z == 0.0 {
+                x.z = 1e-6;
+            }
+        });
 
-pub fn process_sumstats(
-    predictor_order: &[String],
-    raw_stats: &RawGwasSumstats,
-) -> Result<AlignedGwasSumstats> {
-    let is_aligned = predictor_order
-        .iter()
-        .zip(raw_stats.results.iter())
-        .all(|(p, s)| p == &s.predictor);
+        let phenotype = path
+            .as_ref()
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_string();
 
-    let aligned_vec: Vec<GwasResultLine>;
-    let aligned_stats: &[GwasResultLine];
-
-    if is_aligned {
-        aligned_stats = &raw_stats.results;
-    } else {
-        println!("WARNING: Aligning {}", raw_stats.phenotype);
-        aligned_vec = align_sumstats(predictor_order, &raw_stats.results)?;
-        aligned_stats = &aligned_vec;
+        Ok(GwasSumstats::new(phenotype, results))
     }
-
-    let mut chisq = Vec::new();
-    let mut sample_sizes = Vec::new();
-    let mut rhos = Vec::new();
-
-    for row in aligned_stats.iter() {
-        let chisq_i = row.z.powi(2);
-        chisq.push(chisq_i);
-        sample_sizes.push(row.n);
-        rhos.push(row.z.signum() * (chisq_i / (chisq_i + row.n)).sqrt());
-    }
-
-    Ok(AlignedGwasSumstats {
-        phenotype: raw_stats.phenotype.clone(),
-        chisq,
-        sample_sizes,
-        rhos,
-    })
-}
-
-pub fn sumstat_reader(gwas_paths: &[PathBuf], raw_channel: &Sender<RawGwasSumstats>) -> Result<()> {
-    for path in gwas_paths {
-        let results = read_sumstats(path)?;
-        raw_channel.send(results)?;
-    }
-    Ok(())
-}
-
-pub fn sumstat_processor(
-    predictor_order: &[String],
-    raw_channel: &Receiver<RawGwasSumstats>,
-    processed_channel: &Sender<AlignedGwasSumstats>,
-) -> Result<()> {
-    for raw_stats in raw_channel {
-        let aligned_stats = process_sumstats(predictor_order, &raw_stats)?;
-        processed_channel.send(aligned_stats)?;
-    }
-    Ok(())
 }

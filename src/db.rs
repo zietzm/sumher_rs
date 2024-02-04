@@ -4,7 +4,8 @@ use serde_rusqlite::to_params_named;
 use std::collections::HashSet;
 use std::path::Path;
 
-use crate::hsq::{HsqResult, RgResult};
+use crate::hsq::HsqResult;
+use crate::rg::RgResult;
 
 pub struct DbConnection {
     pub conn: Connection,
@@ -91,7 +92,7 @@ impl DbConnection {
 
 fn insert_hsq_data(tx: &Transaction, rows: &[HsqResult]) -> Result<()> {
     let mut stmt = tx.prepare_cached(
-        "INSERT INTO h2 (phenotype, component, estimate, std_error) VALUES 
+        "INSERT INTO h2 (phenotype, component, estimate, std_error) VALUES
         (:phenotype, :component, :estimate, :se)",
     )?;
 
@@ -105,7 +106,7 @@ fn insert_hsq_data(tx: &Transaction, rows: &[HsqResult]) -> Result<()> {
 
 fn insert_rg_data(tx: &Transaction, rows: &[RgResult]) -> Result<()> {
     let mut stmt = tx.prepare_cached(
-        "INSERT INTO rg (phenotype1, phenotype2, component, estimate, std_error) VALUES 
+        "INSERT INTO rg (phenotype1, phenotype2, component, estimate, std_error) VALUES
         (:phenotype1, :phenotype2, :component, :estimate, :se)",
     )?;
 
