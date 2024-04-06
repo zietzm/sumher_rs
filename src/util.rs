@@ -54,7 +54,7 @@ struct PlinkSumstats {
     #[serde(rename(serialize = "A2", deserialize = "OMITTED"))]
     a2: String,
     #[serde(rename(serialize = "n", deserialize = "OBS_CT"))]
-    n: f64,
+    n: i64,
     #[serde(rename(serialize = "Z", deserialize = "T_STAT"))]
     z: f64,
 }
