@@ -411,7 +411,7 @@ int solve_sums(double *stats, double *likes, double *cohers, double *influs,
       for (q = 0; q < total; q++) {
         thetas[q] = sXTY[q];
       }
-      int code = eigen_invert(sXTX, total, sXTX2, 1, thetas, 1);
+      int code = eigen_invert(sXTX, total, sXTX2, 1, thetas);
       if (code != 0) {
         printf("Error in eigen_invert\n");
         return_code = 1;
@@ -508,7 +508,7 @@ int solve_sums(double *stats, double *likes, double *cohers, double *influs,
           }
         }
 
-        int code = eigen_invert(AI, total, AI2, -1, AI3, 1);
+        int code = eigen_invert(AI, total, AI2, -1, AI3);
         if (code != 0) {
           printf("Error in eigen_invert\n");
           return_code = 1;
@@ -779,7 +779,7 @@ int solve_sums(double *stats, double *likes, double *cohers, double *influs,
       beta = 0.0;
       dgemm_("T", "N", &total, &total, &length, &alpha, sTb, &length, sT2,
              &length, &beta, AI, &total);
-      int code = eigen_invert(AI, total, AI2, -1, AI3, 1);
+      int code = eigen_invert(AI, total, AI2, -1, AI3);
       if (code != 0) {
         printf("Error in eigen_invert\n");
         return_code = 1;
@@ -982,7 +982,7 @@ int solve_sums(double *stats, double *likes, double *cohers, double *influs,
         for (q = 0; q < total; q++) {
           thetas[q] = sXTY[q];
         }
-        int code = eigen_invert(sXTX, total, sXTX2, 1, thetas, 1);
+        int code = eigen_invert(sXTX, total, sXTX2, 1, thetas);
         if (code != 0) {
           printf("Error in eigen_invert\n");
           return_code = 1;
@@ -1070,7 +1070,7 @@ int solve_sums(double *stats, double *likes, double *cohers, double *influs,
         }
       }
     } // end of jackknifing
-  }   // end of getting SDs
+  } // end of getting SDs
 
   if (influs != NULL) // get factors for scaling hers to influences (can no
                       // longer use thetas)
@@ -1241,7 +1241,7 @@ int solve_cors(double *stats, int num_parts, int gcon, int cept, int num_blocks,
     for (q = 0; q < total2; q++) {
       thetas[q] = sXTY[q];
     }
-    int code = eigen_invert(sXTX, total2, sXTX2, 1, thetas, 1);
+    int code = eigen_invert(sXTX, total2, sXTX2, 1, thetas);
     if (code != 0) {
       printf("Error in eigen_invert\n");
       return_code = 1;
@@ -1333,7 +1333,7 @@ int solve_cors(double *stats, int num_parts, int gcon, int cept, int num_blocks,
     for (q = 0; q < total2; q++) {
       thetas[q] = sXTY[q];
     }
-    int code = eigen_invert(sXTX, total2, sXTX2, 1, thetas, 1);
+    int code = eigen_invert(sXTX, total2, sXTX2, 1, thetas);
     if (code != 0) {
       printf("Error in eigen_invert\n");
       return_code = 1;
@@ -1403,7 +1403,7 @@ int solve_cors(double *stats, int num_parts, int gcon, int cept, int num_blocks,
     for (q = 0; q < total2; q++) {
       thetas[q] = sXTY[q];
     }
-    int code = eigen_invert(sXTX, total2, sXTX2, 1, thetas, 1);
+    int code = eigen_invert(sXTX, total2, sXTX2, 1, thetas);
     if (code != 0) {
       printf("Error in eigen_invert\n");
       return_code = 1;
@@ -1495,7 +1495,7 @@ int solve_cors(double *stats, int num_parts, int gcon, int cept, int num_blocks,
     for (q = 0; q < total2; q++) {
       thetas[q] = sXTY[q];
     }
-    int code = eigen_invert(sXTX, total2, sXTX2, 1, thetas, 1);
+    int code = eigen_invert(sXTX, total2, sXTX2, 1, thetas);
     if (code != 0) {
       printf("Error in eigen_invert\n");
       return_code = 1;
@@ -1559,7 +1559,7 @@ int solve_cors(double *stats, int num_parts, int gcon, int cept, int num_blocks,
     for (q = 0; q < total3; q++) {
       thetas[q] = sXTY[q];
     }
-    int code = eigen_invert(sXTX, total3, sXTX2, 1, thetas, 1);
+    int code = eigen_invert(sXTX, total3, sXTX2, 1, thetas);
     if (code != 0) {
       printf("Error in eigen_invert\n");
       return_code = 1;
@@ -1663,7 +1663,7 @@ int solve_cors(double *stats, int num_parts, int gcon, int cept, int num_blocks,
     for (q = 0; q < total3; q++) {
       thetas[q] = sXTY[q];
     }
-    int code = eigen_invert(sXTX, total3, sXTX2, 1, thetas, 1);
+    int code = eigen_invert(sXTX, total3, sXTX2, 1, thetas);
     if (code != 0) {
       printf("Error in eigen_invert\n");
       return_code = 1;

@@ -169,8 +169,8 @@ double cg_solve(double *mat, int length, double *mat2, double *mat3, int ncol,
   return (0);
 }
 
-int eigen_invert(double *mat, int length, double *mat2, int ncol, double *mat3,
-                 int type) {
+int eigen_invert(double *mat, int length, double *mat2, int ncol,
+                 double *mat3) {
   // ncol=0 - get "cholesky", ncol=-1 - get inverse, ncol>0 - solve mat X = mat3
   // ncol=0 - mat3 NULL, ncol=-1 - mat3 workspace size(mat), ncol>0 - mat3 = RHS
   // type=0 - quiet, type=1 - complain

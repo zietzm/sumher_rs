@@ -3,8 +3,7 @@
 double cg_solve(double *mat, int length, double *mat2, double *mat3, int ncol,
                 double tol);
 
-int eigen_invert(double *mat, int length, double *mat2, int ncol, double *mat3,
-                 int type);
+int eigen_invert(double *mat, int length, double *mat2, int ncol, double *mat3);
 
 void eigen_strip(double *mat, int start, int end, int total, double strip);
 
