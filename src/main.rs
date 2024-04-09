@@ -14,7 +14,7 @@ use crate::db::DbConnection;
 use crate::util::{format_plink_sumstats, RuntimeSetup};
 
 #[derive(Parser, Debug)]
-#[command(name = "sumher_rs")]
+#[command(name = "sumher_rs", about, version)]
 struct Cli {
     #[command(subcommand)]
     command: Command,
